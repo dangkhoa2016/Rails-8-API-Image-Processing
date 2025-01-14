@@ -50,3 +50,9 @@ end
 gem "devise", "~> 4.9"
 
 gem "devise-jwt", "~> 0.12.1"
+
+gem "ruby-vips", "~> 2.2"
+
+gem "faraday", "~> 2.12"
+
+gem "color_conversion", "~> 0.1.2"
