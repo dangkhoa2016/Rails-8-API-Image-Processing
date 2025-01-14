@@ -2,6 +2,7 @@ require_relative "../lib/exception_middleware"
 require_relative "boot"
 require "rails/all"
 require "dotenv/load" if Rails.env.development? || Rails.env.test?
+require "color_conversion"
 
 # Require the gems listed in Gemfile, including any gems
 # you"ve limited to :test, :development, or :production.
