@@ -42,6 +42,10 @@ en:
     parameter_missing: Parameter missing
     not_found: "%{model} not found"
     must_be_adminstrator: You must be an administrator to perform this action
+    failed_to_process_image: "Failed to process image"
+    url_parameter_is_required: "URL parameter is required"
+    invalid_url: "Invalid URL"
+    failed_to_download_image: "Failed to download image"
 
   user:
     deleted: User [%{email}] with id [%{id}] has been deleted

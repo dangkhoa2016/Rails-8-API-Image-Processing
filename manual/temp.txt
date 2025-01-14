@@ -3,10 +3,6 @@ config/master.key: 3c48b18ee84c68215b11e1c6c42feb8e
 config/credentials.yml.enc is encrypted with the master key
 
 
-rails generate devise User
-rails generate controller User index
-rails generate controller Home index
-
 ----
 
 
