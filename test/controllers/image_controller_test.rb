@@ -18,9 +18,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   def stub_request(url, file, image_format, expect_width, expect_height)
     stubs = Faraday::Adapter::Test::Stubs.new do |stub|
       body = File.open("test/fixtures/files/#{file}", "rb").read
-      original_image = Vips::Image.new_from_buffer(body, "")
-      assert_equal expect_width, original_image.get("width")
-      assert_equal expect_height, original_image.get("height")
+      original_image = Magick::Image.from_blob(body).first
+      assert_equal expect_width, original_image.columns
+      assert_equal expect_height, original_image.rows
       stub.get(url) { |env| [ 200, { "Content-Type": "image/#{image_format}" }, body ] }
     end
     Faraday.new { |b| b.adapter(:test, stubs) }
@@ -77,8 +77,8 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_equal "image/jpg", content_type
     file_name = response_headers["Content-Disposition"]
     assert_equal "inline; filename=\"sample.jpg\"", file_name
-    image = Vips::Image.new_from_buffer(response.body, "")
-    assert_equal 714, image.get("width")
-    assert_equal 500, image.get("height")
+    image = Magick::Image.from_blob(body).first
+    assert_equal 714, image.columns
+    assert_equal 500, image.rows
   end
 end

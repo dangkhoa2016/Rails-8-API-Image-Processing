@@ -7,3 +7,5 @@ rails generate controller Home index
 rails generate controller Image index
 
 sudo apt-get install libvips -y
+sudo apt-get install libmagickwand-dev -y
+sudo apt-get install libmagickwand-dev libvips -y

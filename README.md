@@ -1,16 +1,16 @@
 
 # Rails v8 API Image Processing with JWT Authentication
 
-This is a simple Rails v8 API server that process image using JSON Web Tokens (JWT) for authentication. The server is built using the famous `lipvips` library and [Rails-8-API-Authentication](https://github.com/dangkhoa2016/Rails-8-API-Authentication).
+This is a simple Rails v8 API server that process image using JSON Web Tokens (JWT) for authentication. The server is built using the famous `rmagick` library and [Rails-8-API-Authentication](https://github.com/dangkhoa2016/Rails-8-API-Authentication).
 
 ## Features
 
 - **Process Image:**
-  - Apply any `lipvips` image processing operation to an image.
+  - Apply any `rmagick` image processing operation to an image.
 
 ## Technologies Used
 
-- **ruby-vips**: Ruby extension for the libvips image processing library ([link](https://github.com/libvips/ruby-vips)).
+- **rmagick**: Ruby bindings for ImageMagick ([link](https://github.com/rmagick/rmagick)).
 - **Faraday**: Simple, but flexible HTTP client library, with support for multiple backend ([link](https://github.com/lostisland/faraday)).
 - **Color Conversion**: A ruby gem to perform color conversions ([link](https://github.com/devrieda/color_conversion)).
 - **Rails-8-API-Authentication**: A simple Rails v8 API server with JWT authentication ([link](https://github.com/dangkhoa2016/Rails-8-API-Authentication)).
@@ -44,7 +44,7 @@ This is a simple Rails v8 API server that process image using JSON Web Tokens (J
 You must include the JWT token in the `Authorization` header for all requests. The token is generated when you log in to the server.
 
 ### 1. **POST /image**
-- Process an image using `Vips::Image` and return the processed image.
+- Process an image using `Magick::Image` and return the processed image.
 - **Body**:
     ```json
     {
@@ -63,7 +63,7 @@ You must include the JWT token in the `Authorization` header for all requests. T
     ```
 
 ### 2. **GET /image**
-- Process an image using `Vips::Image` and return the processed image.
+- Process an image using `Magick::Image` and return the processed image.
 - **Body**:
     ```
     {

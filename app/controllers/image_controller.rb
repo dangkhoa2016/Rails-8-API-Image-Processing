@@ -1,10 +1,10 @@
 # example:
 
 # {
-#   shrink: [5, 5, { xshrink: 50 }],
-#   sharpen: { x1: 0.8, sigma: 0.5 }
+#   resize_to_fit: [300, 300],
+#   sharpen: [10, 2],
 # }
-# /image?url=https://.....png&shrink[]=5&shrink[]=5&shrink[][xshrink]=50&sharpen[x1]=0.8&sharpen[sigma]=0.5
+# /image?url=https://.....png&resize_to_fit[]=300&resize_to_fit[]=300&sharpen[]=10&sharpen[]=2
 
 class ImageController < ApplicationController
   before_action :authorize_request
@@ -42,10 +42,10 @@ class ImageController < ApplicationController
     end
 
     begin
-      image = Vips::Image.new_from_buffer(response_body, "")  # Create an image object from the buffer
+      image = Magick::Image.from_blob(response.body).first  # Create an image object from the buffer
 
       original_format = response_headers["content-type"].split("/").last || "jpg"
-      transform_methods = ImageTransformHelper.get_transform_params(get_transform_methods, original_format, image.size)
+      transform_methods = ImageTransformHelper.get_transform_params(get_transform_methods, original_format)
 
       quality = transform_methods.delete(:quality) || transform_methods.delete(:q)
       quality = quality.to_i if quality.present?
@@ -53,15 +53,24 @@ class ImageController < ApplicationController
       image_format = transform_methods.delete(:image_format)
       result_format = image_format.present? ? image_format[:format] : original_format
 
-      # Loop through query string parameters and apply corresponding operations
-      image = apply_image_transformations(image, transform_methods)
+      has_rotate = transform_methods.keys.include?("rotate")
+      if has_rotate
+        image = apply_background_color(image, get_background_color(transform_methods), true)
+
+        # Loop through query string parameters and apply corresponding operations
+        image = apply_image_transformations(image, transform_methods)
+      else
+        # Loop through query string parameters and apply corresponding operations
+        image = apply_image_transformations(image, transform_methods)
+
+        image = apply_background_color(image, get_background_color(transform_methods), false)
+      end
 
       # Save the image to memory
-      save_params = ".#{result_format}"
-      if quality.present? && quality > 0
-        save_params += "[Q=#{quality}]"  # Set the quality of the image
+      image_buffer = image.to_blob do |image|
+        image.quality = quality if quality.present? && quality > 0
+        image.format = result_format
       end
-      image_buffer = image.write_to_buffer(save_params)
 
       # Return the image as binary data (image/jpeg)
       send_data image_buffer, type: "image/#{result_format}", disposition: "inline; filename=\"#{get_file_name_without_extension(url)}.#{result_format}\""
@@ -75,7 +84,7 @@ class ImageController < ApplicationController
   private
 
   def get_transform_methods
-    params.permit!.to_h.except(:controller, :action, :url, :u, :image, :flatten)
+    params.permit!.to_h.except(:controller, :action, :url, :u, :image)
   end
 
   # def get_hash_from_query_string(query_string)
@@ -107,10 +116,39 @@ class ImageController < ApplicationController
     end
   end
 
+  def apply_background_color(image, background_color, has_rotate)
+    puts "apply_background_color: #{background_color}"
+
+    if background_color.present?
+      background_color = ImageTransformHelper.convert_color(background_color) rescue nil
+    end
+
+    if background_color.present?
+      image.background_color = background_color
+      if has_rotate
+        image.alpha(Magick::BackgroundAlphaChannel)
+      else
+        image.alpha(Magick::RemoveAlphaChannel)
+      end
+    end
+
+    image
+  end
+
+  def get_background_color(transform_methods = {})
+    background_color = transform_methods.delete(:background) if transform_methods[:background].present?
+
+    # if background_color.blank?
+    #   background_color = ImageTransformHelper.white_background
+    # end
+
+    background_color
+  end
+
   # Apply image transformations based on query string parameters
-  # example: /images?sharpen[x1]=1&shrink[]=1&shrink[]=2&shrink[][xshrink]=1
-  # {"sharpen"=>{"x1"=>"1"}, "shrink"=>["1", "2", {"xshrink"=>"1"}]}
-  # refer: https://libvips.github.io/ruby-vips/Vips/Image.html
+  # example: /images?sharpen[]=10&sharpen[]=2&resize_to_fit[]=300&resize_to_fit[]=300
+  # {"sharpen"=>[10,2], "resize_to_fit"=>[300,300]}
+  # refer: https://rmagick.github.io/usage.html
   def apply_image_transformations(image, transform_methods = {})
     puts "apply_image_transformations: #{transform_methods}"
     # Loop through query string parameters and apply corresponding operations
@@ -121,8 +159,9 @@ class ImageController < ApplicationController
       if image.respond_to?(method) && image.method(method).parameters.any?
         puts "applying #{method} with params #{params}"
 
-        if method == "rotate" && image.bands == 4 && params.last.present?
-          params.last[:background].push(255)
+        if method == "rotate" && params.size > 1
+          options = params.pop || {}
+          background_color = ImageTransformHelper.convert_color(options[:background]) if options[:background].present?
         end
 
         begin
@@ -137,8 +176,20 @@ class ImageController < ApplicationController
           else
             image = image.send(method, convert_params_value_string_to_number(params))
           end
+
+          if method == "rotate" && background_color.present?
+            background = Magick::Image.new(image.columns, image.rows) { |options| options.background_color = background_color }
+            image = background.composite(image, 0, 0, Magick::OverCompositeOp)
+          end
         rescue => e
           puts "Error applying #{method} with params #{params}: #{e.message}"
+        end
+      elsif image.respond_to?(method) && image.method("#{method}=").parameters.any?
+        begin
+          puts "applying #{method} with params #{params}"
+          image.send("#{method}=", params)
+        rescue => e
+          puts "Error applying property #{method} with params #{params}: #{e.message}"
         end
       end
     end

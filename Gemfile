@@ -51,7 +51,7 @@ gem "devise", "~> 4.9"
 
 gem "devise-jwt", "~> 0.12.1"
 
-gem "ruby-vips", "~> 2.2"
+gem "rmagick", "~> 6.0"
 
 gem "faraday", "~> 2.12"
 

@@ -1,14 +1,14 @@
 class ImageTransformHelper
   class << self
-    def get_transform_params(transform_methods, original_format, current_size)
+    def get_transform_params(transform_methods, original_format)
       bg = determine_background_color(transform_methods)
+      transform_methods[:background] = bg
+
       result_format = determine_image_format(transform_methods)
 
       image_format = determine_result_format(original_format, result_format)
 
       apply_image_format(transform_methods, image_format, result_format)
-
-      apply_flatten_if_required(transform_methods, result_format, bg) if result_format.present?
 
       puts "get_transform_params: #{transform_methods}"
 
@@ -17,20 +17,25 @@ class ImageTransformHelper
       end
 
       if transform_methods.key?(:resize)
-        transform_methods[:resize] = modify_resize(transform_methods[:resize], current_size)
+        transform_methods[:resize] = modify_resize(transform_methods[:resize])
       end
 
       transform_methods
     end
 
-    private
-
     def white_background
-      [ 255, 255, 255 ]
+      "#FFFFFF"
     end
 
     def convert_color(color)
-      return color if color.is_a?(Array)
+      return color if color.blank?
+      if color.is_a?(Array)
+        if color.all? { |c| c.is_a?(Integer) }
+          color = { r: color[0], g: color[1], b: color[2] }
+        else
+          return color
+        end
+      end
 
       if color&.downcase == "transparent"
         return []
@@ -39,40 +44,35 @@ class ImageTransformHelper
       parsed_color = ColorConversion::Color.new(color) rescue nil
 
       if parsed_color.present?
-        parsed_color.rgb.values
+        parsed_color.hex
       else
         white_background
       end
     end
 
-    def modify_resize(resize, current_size)
+    private
+
+    def modify_resize(resize)
       return 0 unless resize
 
       if resize.is_a?(Array)
-        scale, options = resize
-        if scale.to_f > 0.0 && scale.to_f <= 10
-          [ scale.to_f, options || {} ]
-        else # width and height
-          scale = calculate_scale(scale.to_i, options.to_i, current_size)
-          if scale
-            [ scale, {} ]
-          else
-            []
-          end
+        width, height = resize
+        if height.present?
+          params = [ width.to_i, height.to_i ].compact
+          params.size == 2 ? params : []
+        else
+          scale = width.to_f
+          scale > 0 && scale < 10 ? [ scale ] : []
         end
       elsif resize.is_a?(Hash)
-        width = resize[:width]
-        height = resize[:height]
         scale = resize[:scale]
-        options = resize.except(:width, :height, :scale)
-        if !scale
-          scale = calculate_scale(width, height, current_size)
-        end
-
-        if scale
-          [ scale, options || {} ]
+        scale = scale.to_f if scale.present?
+        if scale.present? && scale > 0 && scale < 10
+          [ scale ]
         else
-          []
+          width = resize[:width]&.to_i
+          height = resize[:height]&.to_i
+          width.present? && height.present? && width > 0 && height > 0 ? [ width, height ] : []
         end
       else
         resize
@@ -104,21 +104,21 @@ class ImageTransformHelper
 
       if rotation.is_a?(Array)
         angle, options = rotation
-        bg = (options && (options[:bg] || options[:background])) || white_background # white background instead of black
+        bg = (options && (options[:bg] || options[:background]))
         bg = convert_color(bg)
         [ angle, bg.present? ? { background: convert_color(bg) } : {} ]
       elsif rotation.is_a?(Hash)
         angle = rotation[:angle]
-        bg = rotation[:bg] || rotation[:background] || white_background
+        bg = rotation[:bg] || rotation[:background]
         bg = convert_color(bg)
         [ angle, bg.present? ? { background: convert_color(bg) } : {} ]
       else
-        [ rotation, { background: convert_color(white_background) } ]
+        [ rotation ]
       end
     end
 
     def determine_background_color(transform_methods)
-      bg = transform_methods.delete(:bg) || transform_methods.delete(:background) || white_background
+      bg = transform_methods.delete(:bg) || transform_methods.delete(:background)
       convert_color(bg)
     end
 
@@ -188,12 +188,6 @@ class ImageTransformHelper
 
       if image_format[:quality].present?
         transform_methods[:quality] = image_format.delete(:quality)
-      end
-    end
-
-    def apply_flatten_if_required(transform_methods, result_format, bg)
-      if transform_methods[:flatten].blank? && [ "jpeg", "jpg" ].include?(result_format)
-        transform_methods[:flatten] = { background: bg }
       end
     end
   end
