@@ -3,18 +3,53 @@ require "test_helper"
 class ImageControllerTest < ActionDispatch::IntegrationTest
   Minitest.after_run { puts "ImageControllerTest completed" }
 
-  test "get index without 'url' parameter" do
-    get image_index_url
-    assert_response :bad_request
+  setup do
+    @original_faraday_connection = Faraday.default_connection
+    @user = users(:admin)
+
+    @token, @payload = Warden::JWTAuth::UserEncoder.new.call(@user, :user, nil)
+    @headers = { "Authorization": "Bearer #{@token}" }
   end
 
-  test "get index with invalid 'url' parameter" do
-    get image_index_url, params: { url: "invalid" }
-    assert_response :bad_request
+  teardown do
+    Faraday.default_connection = @original_faraday_connection
   end
 
-  test "get index with valid 'url' parameter" do
+  def stub_request(url, file, image_format, expect_width, expect_height)
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      body = File.open("test/fixtures/files/#{file}", "rb").read
+      original_image = Vips::Image.new_from_buffer(body, "")
+      assert_equal expect_width, original_image.get("width")
+      assert_equal expect_height, original_image.get("height")
+      stub.get(url) { |env| [ 200, { "Content-Type": "image/#{image_format}" }, body ] }
+    end
+    Faraday.new { |b| b.adapter(:test, stubs) }
+  end
+
+  test "get index without 'token'" do
     get image_index_url, params: { url: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" }
+    assert_response :unauthorized
+  end
+
+  test "get index with invalid 'token'" do
+    get image_index_url,
+      params: { url: "http://example.com/image.jpg" },
+      headers: { "Authorization": "Bearer invalid" }
+    assert_response :unauthorized
+  end
+
+  test "get index with valid 'token' and without 'url' parameter" do
+    get image_index_url, headers: @headers
+    assert_response :bad_request
+  end
+
+  test "get index with valid 'token' and with invalid 'url' parameter" do
+    get image_index_url, params: { url: "invalid" }, headers: @headers
+    assert_response :bad_request
+  end
+
+  test "get index with valid 'token' and with valid 'url' parameter" do
+    get image_index_url, params: { url: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" }, headers: @headers
     assert_response :success
   end
 

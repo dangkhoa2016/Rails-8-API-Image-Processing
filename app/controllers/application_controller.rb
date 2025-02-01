@@ -23,6 +23,22 @@ class ApplicationController < ActionController::API
     end
   end
 
+  def authorize_request
+    if current_user.blank?
+      return render json: { errors: I18n.t("errors.unauthorized") }, status: :unauthorized
+    end
+
+    if action_name.in?(%w[update destroy show])
+      if current_user.id.to_s == params[:id].to_s
+        return
+      end
+    end
+
+    unless current_user.admin?
+      render json: { errors: I18n.t("errors.must_be_adminstrator") }, status: :unauthorized
+    end
+  end
+
   # Handle errors for path not found
   def route_not_found
     logger.error "Route not found: #{request.url}"
