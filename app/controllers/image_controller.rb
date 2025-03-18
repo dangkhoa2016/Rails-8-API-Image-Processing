@@ -44,7 +44,6 @@ class ImageController < ApplicationController
     begin
       image = Vips::Image.new_from_buffer(response_body, "")  # Create an image object from the buffer
 
-      
       original_format = response_headers["content-type"].split("/").last || "jpg"
       transform_methods = ImageTransformHelper.get_transform_params(get_transform_methods, original_format, image.size)
 
@@ -59,7 +58,7 @@ class ImageController < ApplicationController
 
       # Save the image to memory
       save_params = ".#{result_format}"
-      if quality.present? && quality.is_a?(Integer) && quality > 0
+      if quality.present? && quality > 0
         save_params += "[Q=#{quality}]"  # Set the quality of the image
       end
       image_buffer = image.write_to_buffer(save_params)
@@ -115,6 +114,7 @@ class ImageController < ApplicationController
   def apply_image_transformations(image, transform_methods = {})
     puts "apply_image_transformations: #{transform_methods}"
     # Loop through query string parameters and apply corresponding operations
+
     transform_methods.each do |method, params|
       next if params.blank?
 
