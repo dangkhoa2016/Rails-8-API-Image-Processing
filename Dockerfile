@@ -2,8 +2,8 @@
 # check=error=true
 
 # This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t rails_8_api_authentication .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=$(cat config/master.key) --name rails_8_api_authentication rails_8_api_authentication
+# docker build -t rails_8_api_image_processing .
+# docker run -d -p 80:80 -e RAILS_MASTER_KEY=$(cat config/master.key) --name rails_8_api_image_processing rails_8_api_image_processing
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
