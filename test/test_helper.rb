@@ -21,6 +21,13 @@ require "cgi"
 require "devise"
 require "devise/jwt/test_helpers"
 require "securerandom"
+require "webmock/minitest"
+
+# Allow Faraday test adapter (in-process stubs) while blocking real network calls
+WebMock.disable_net_connect!(
+  allow_localhost: false,
+  allow: [ "127.0.0.1", "::1" ]  # allow rack test server itself
+)
 
 module ActiveSupport
   class TestCase

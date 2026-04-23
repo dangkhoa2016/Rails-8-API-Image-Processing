@@ -51,6 +51,9 @@ group :development, :test do
   # Code coverage
   gem "simplecov", require: false
   gem "simplecov-console", require: false
+
+  # Block real HTTP requests in tests
+  gem "webmock"
 end
 
 group :test do

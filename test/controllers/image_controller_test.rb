@@ -11,17 +11,48 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     @headers = { "Authorization": "Bearer #{@token}" }
   end
 
-  def stub_request(file, image_format, expect_width, expect_height)
+  def fixture_response(file, image_format, expect_width:, expect_height:)
     body = File.binread("test/fixtures/files/#{file}")
     original_image = Vips::Image.new_from_buffer(body, "")
     assert_equal expect_width, original_image.get("width")
     assert_equal expect_height, original_image.get("height")
 
-    Struct.new(:headers, :body).new({ "content-type" => "image/#{image_format}" }, body)
+    http_response(content_type: "image/#{image_format}", body: body)
+  end
+
+  def http_response(content_type:, body:)
+    Struct.new(:headers, :body).new({ "content-type" => content_type }, body)
+  end
+
+  def stub_download(result)
+    Faraday.stub(:get, result) do
+      yield
+    end
+  end
+
+  def assert_invalid_url_response(url)
+    get image_index_url, params: { url: url }, headers: @headers
+
+    assert_response :bad_request
+    assert_equal I18n.translate("errors.invalid_url"), json_response.fetch("error")
+  end
+
+  def assert_ssrf_blocked(url, addresses: nil, resolver_error: nil)
+    resolver = if resolver_error
+      ->(_host) { raise resolver_error }
+    else
+      addresses
+    end
+
+    Resolv.stub(:getaddresses, resolver) do
+      stub_download(->(_request_url) { flunk "Faraday should not be called for blocked SSRF urls" }) do
+        assert_invalid_url_response(url)
+      end
+    end
   end
 
   test "get index without 'token'" do
-    get image_index_url, params: { url: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" }
+    get image_index_url, params: { url: "https://test.local/images/sample.jpeg" }
     assert_response :unauthorized
   end
 
@@ -43,36 +74,27 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "get index with valid token blocks urls that resolve to private addresses" do
-    url = "https://blocked.local/images/sample.jpeg"
-
-    Resolv.stub(:getaddresses, ["127.0.0.1"]) do
-      Faraday.stub(:get, ->(_request_url) { flunk "Faraday should not be called for blocked SSRF urls" }) do
-        get image_index_url, params: { url: url }, headers: @headers
-      end
-    end
-
-    assert_response :bad_request
-    assert_equal I18n.translate("errors.invalid_url"), json_response.fetch("error")
+    assert_ssrf_blocked("https://blocked.local/images/sample.jpeg", addresses: ["127.0.0.1"])
   end
 
   test "get index with valid token blocks urls when ssrf resolution fails" do
-    url = "https://resolver-error.local/images/sample.jpeg"
+    assert_ssrf_blocked(
+      "https://resolver-error.local/images/sample.jpeg",
+      resolver_error: StandardError.new("dns failure")
+    )
+  end
 
-    Resolv.stub(:getaddresses, ->(_host) { raise StandardError, "dns failure" }) do
-      Faraday.stub(:get, ->(_request_url) { flunk "Faraday should not be called when SSRF detection fails closed" }) do
-        get image_index_url, params: { url: url }, headers: @headers
-      end
+  test "get index with valid token blocks non-http schemes" do
+    stub_download(->(_request_url) { flunk "Faraday should not be called for invalid schemes" }) do
+      assert_invalid_url_response("ftp://example.com/image.jpg")
     end
-
-    assert_response :bad_request
-    assert_equal I18n.translate("errors.invalid_url"), json_response.fetch("error")
   end
 
   test "get index with valid 'token' and with valid 'url' parameter" do
     url = "https://test.local/images/sample.jpeg"
-    faraday_response = stub_request("sample.jpeg", "jpeg", 400, 713)
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
-    Faraday.stub(:get, faraday_response) do
+    stub_download(faraday_response) do
       get image_index_url, params: { url: url }, headers: @headers
     end
 
@@ -81,9 +103,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
   test "get index with valid 'token' and with valid 'url' parameter and with 'resize' parameter" do
     url = "https://test.local/images/sample.jpeg"
-    faraday_response = stub_request("sample.jpeg", "jpeg", 400, 713)
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
-    Faraday.stub(:get, faraday_response) do
+    stub_download(faraday_response) do
       get image_index_url, params: { url: url, resize: "0.5" }, headers: @headers
     end
 
@@ -97,9 +119,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
   test "get index with valid 'token' and with valid 'url' parameter and with 'rotate' and 'format' parameter" do
     url = "https://test.local/images/sample.png"
-    faraday_response = stub_request("sample.png", "png", 500, 714)
+    faraday_response = fixture_response("sample.png", "png", expect_width: 500, expect_height: 714)
 
-    Faraday.stub(:get, faraday_response) do
+    stub_download(faraday_response) do
       get image_index_url, params: { url: url, rotate: "90", format: "jpg" }, headers: @headers
     end
 
@@ -117,7 +139,7 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   test "get index with valid token returns unprocessable entity when download fails" do
     url = "https://test.local/images/missing.jpeg"
 
-    Faraday.stub(:get, ->(_request_url) { raise StandardError, "download failed" }) do
+    stub_download(->(_request_url) { raise StandardError, "download failed" }) do
       get image_index_url, params: { url: url }, headers: @headers
     end
 
@@ -131,9 +153,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   test "get index with valid token returns unprocessable entity when response exceeds max size" do
     url = "https://test.local/images/large.jpeg"
     oversized_body = ("a" * (ImageController::MAX_RESPONSE_SIZE + 1)).b
-    faraday_response = Struct.new(:headers, :body).new({ "content-type" => "image/jpeg" }, oversized_body)
+    faraday_response = http_response(content_type: "image/jpeg", body: oversized_body)
 
-    Faraday.stub(:get, faraday_response) do
+    stub_download(faraday_response) do
       get image_index_url, params: { url: url }, headers: @headers
     end
 
@@ -143,9 +165,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
   test "get index with valid token applies quality when q parameter is present" do
     url = "https://test.local/images/sample.jpeg"
-    faraday_response = stub_request("sample.jpeg", "jpeg", 400, 713)
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
-    Faraday.stub(:get, faraday_response) do
+    stub_download(faraday_response) do
       get image_index_url, params: { url: url, q: "80" }, headers: @headers
     end
 
@@ -154,9 +176,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
   test "get index with valid token returns unprocessable entity when image processing fails" do
     url = "https://test.local/images/broken.jpeg"
-    faraday_response = Struct.new(:headers, :body).new({ "content-type" => "image/jpeg" }, "raw-image")
+    faraday_response = http_response(content_type: "image/jpeg", body: "raw-image")
 
-    Faraday.stub(:get, faraday_response) do
+    stub_download(faraday_response) do
       get image_index_url, params: { url: url }, headers: @headers
     end
 
