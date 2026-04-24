@@ -144,7 +144,6 @@ class ImageController < ApplicationController
   # {"sharpen"=>{"x1"=>"1"}, "shrink"=>["1", "2", {"xshrink"=>"1"}]}
   # refer: https://libvips.github.io/ruby-vips/Vips/Image.html
   def apply_image_transformations(image, transform_methods = {})
-    puts "apply_image_transformations: #{transform_methods}"
     # Loop through query string parameters and apply corresponding operations
 
     transform_methods.each do |method, params|

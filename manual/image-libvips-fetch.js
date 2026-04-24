@@ -1,3 +1,6 @@
+// Set TEST_JWT_TOKEN environment variable before using these examples:
+//   In Node: process.env.TEST_JWT_TOKEN = "your-jwt-token-here"
+
 
 // 1 - login using admin credentials
 
@@ -16,7 +19,7 @@ fetch("/users/sign_in", {
 
 
 // responsed header
-"token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs",
+"token": "<your-jwt-token-here>",
 {
   "id": 1,
   "email": "admin@localhost.test",
@@ -41,7 +44,7 @@ fetch("/users/sign_in", {
 // get request
 fetch("/image?url=https://[...].png&sharpen[x1]=0.1&sharpen[radius]=100", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -50,7 +53,7 @@ fetch("/image?url=https://[...].png&sharpen[x1]=0.1&sharpen[radius]=100", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -71,7 +74,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&sharpen[x1]=2&sharpen[radius]=10", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -81,7 +84,7 @@ fetch("/image?url=https://[...].png&sharpen[x1]=2&sharpen[radius]=10", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -101,7 +104,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=2", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -110,7 +113,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=2", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -129,7 +132,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=0.3", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -138,7 +141,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=0.3", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -156,7 +159,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&format=jpg&bg=lime", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -165,7 +168,7 @@ fetch("/image?url=https://[...].png&format=jpg&bg=lime", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -184,7 +187,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&format=jpg&q=70&background=orange", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -193,7 +196,7 @@ fetch("/image?url=https://[...].png&format=jpg&q=70&background=orange", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -213,7 +216,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -222,7 +225,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -246,7 +249,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=lime&f=jpg", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -255,7 +258,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=lime&f=
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -282,7 +285,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&rotate%5B%5D=90", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -291,7 +294,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&rotate%5B%
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -321,7 +324,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&rotate%5B%5D=120&bg=lime&f=jpg", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -330,7 +333,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&rotate%5B%
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -363,7 +366,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&rotate%5B%5D=120&bg=lime&f=jpg&q=80", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -372,7 +375,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&rotate%5B%
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -401,7 +404,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&format=jpg&shrink%5B%5D=2&shrink%5B%5D=1", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -410,7 +413,7 @@ fetch("/image?url=https://[...].png&format=jpg&shrink%5B%5D=2&shrink%5B%5D=1", {
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -435,7 +438,7 @@ fetch("/image", {
 fetch("/image?url=https://[...].png&format=jpg&resize%5B%5D=300&resize%5B%5D=100", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -444,7 +447,7 @@ fetch("/image?url=https://[...].png&format=jpg&resize%5B%5D=300&resize%5B%5D=100
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -469,7 +472,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=%23ee7c46&rotate=120", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -478,7 +481,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=%23ee7c
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -505,7 +508,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=%23ee7c46&rotate=120&f=jpg", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -514,7 +517,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=%23ee7c
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -545,7 +548,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=%23ee7c46&rotate%5B%5D=120&rotate%5B%5D%5Bbackground%5D=lime&f=jpg", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -554,7 +557,7 @@ fetch("/image?url=https://[...].png&resize%5B%5D=300&resize%5B%5D=300&bg=%23ee7c
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
@@ -586,7 +589,7 @@ fetch("/image", {
 // get request
 fetch("/image?url=https://[...].png&toFormat=png&resize%5Bwidth%5D=300&resize%5Bheight%5D=300&rotate%5B%5D=120&bg=lime&q=50", {
   headers: {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   method: "GET"
 });
@@ -595,7 +598,7 @@ fetch("/image?url=https://[...].png&toFormat=png&resize%5Bwidth%5D=300&resize%5B
 fetch("/image", {
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwic2NwIjoidXNlciIsImF1ZCI6bnVsbCwiaWF0IjoxNzM4NDgxOTgyLCJleHAiOjE3Mzg0ODU1ODIsImp0aSI6ImVhNTljYmQ2LTI2N2QtNGUzNy1hYzZkLTJhYzNiMWRlMmI5ZiJ9.F6tKU3JE8wAlDq2SR52GW7cZlSnEyq_-E1PiCLyfefs"
+    "Authorization": "Bearer " + (process.env.TEST_JWT_TOKEN || "<your-jwt-token-here>") + ""
   },
   body: JSON.stringify({
     "url": "https://[...].png",
