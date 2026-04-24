@@ -1,102 +1,140 @@
 
-# Rails v8 API Image Processing with JWT Authentication
+# Rails 8 API Image Processing with JWT Authentication
 
-This is a simple Rails v8 API server that process image using JSON Web Tokens (JWT) for authentication. The server is built using the famous `lipvips` library and [Rails-8-API-Authentication](https://github.com/dangkhoa2016/Rails-8-API-Authentication).
+A Rails 8 API server that downloads and transforms images using [libvips](https://www.libvips.org/) with JWT-based authentication.
 
 ## Features
 
-- **Process Image:**
-  - Apply any `lipvips` image processing operation to an image.
+- Download a remote image and apply any libvips transformation in a single request.
+- JWT authentication via [devise-jwt](https://github.com/waiting-for-dev/devise-jwt).
+- SSRF protection: blocks loopback, private, and link-local addresses.
+- Response size limit (20 MB) to prevent memory exhaustion.
+- Rate limiting on auth endpoints via Rack::Attack.
 
-## Technologies Used
+## Technologies
 
-- **ruby-vips**: Ruby extension for the libvips image processing library ([link](https://github.com/libvips/ruby-vips)).
-- **Faraday**: Simple, but flexible HTTP client library, with support for multiple backend ([link](https://github.com/lostisland/faraday)).
-- **Color Conversion**: A ruby gem to perform color conversions ([link](https://github.com/devrieda/color_conversion)).
-- **Rails-8-API-Authentication**: A simple Rails v8 API server with JWT authentication ([link](https://github.com/dangkhoa2016/Rails-8-API-Authentication)).
+| Gem | Purpose |
+|-----|---------|
+| [ruby-vips](https://github.com/libvips/ruby-vips) | libvips image processing |
+| [Faraday](https://github.com/lostisland/faraday) | HTTP client for image download |
+| [devise](https://github.com/heartcombo/devise) + [devise-jwt](https://github.com/waiting-for-dev/devise-jwt) | Authentication |
+| [rack-cors](https://github.com/cyu/rack-cors) | CORS headers |
+| [rack-attack](https://github.com/rack/rack-attack) | Rate limiting |
 
 ## Installation
 
-1. Clone the repository:
+1. Clone the repository and install dependencies:
     ```bash
     git clone <repository-url>
-    cd <repository-folder>
-    ```
-
-2. Install dependencies:
-    ```bash
+    cd Rails-8-API-Image-Processing
     bundle install
     ```
 
-3. Set up the SQLite database:
-    - The application will automatically create a database file (`development.sqlite`) in the project root directory when the server starts. You can configure your database connection settings in the `config/database.yml` file if needed.
-
-4. Create a `.env` file at the root of your project for environment variables:
-    ```env
-    RAILS_LOG_TO_STDOUT=true
-	RAILS_ENV=development
-	PORT=4000
-	RAILS_MAX_THREADS=1
-    ```
-
-## API Endpoints
-
-You must include the JWT token in the `Authorization` header for all requests. The token is generated when you log in to the server.
-
-### 1. **POST /image**
-- Process an image using `Vips::Image` and return the processed image.
-- **Body**:
-    ```json
-    {
-      "url": "https://example.com/image.jpg",
-      "format": "png",
-      "background": "#ff0000",
-      "resize": {
-        "width": 300,
-        "height": 300,
-      },
-    }
-    ```
-- **Response**:
-    ```image
-    <processed_image>
-    ```
-
-### 2. **GET /image**
-- Process an image using `Vips::Image` and return the processed image.
-- **Body**:
-    ```
-    {
-    }
-    ```
-  **Query**:
-    ```
-    "url=https://example.com/image.jpg&format=png&background=#ff0000&resize[width]=300&resize[height]=300"
-    ```
-- **Response**:
-    ```image
-    <processed_image>
-    ```
-
-## Example Usage
-
-1. Register a user:
+2. Copy the sample env file and edit as needed:
     ```bash
-    curl -X POST http://localhost:4000/users/register -H "Content-Type: application/json" -d '{"email": "user@example.com", "password": "password123", "username": "user123"}'
+    cp .env.sample .env
     ```
 
-2. Log in to get the JWT token:
+3. Set up the database and seed an admin user:
     ```bash
-    curl -X POST http://localhost:4000/users/login -H "Content-Type: application/json" -d '{"username": "user123", "password": "password123"}'
+    bin/rails db:create db:migrate db:seed
     ```
 
-3. Process an image:
+4. Start the server:
     ```bash
-    curl -X GET http://localhost:4000/image?url=https://[....].png&toFormat=jpg&resize%5Bwidth%5D=300' -H "Authorization: Bearer <jwt_token>"
+    bin/rails server -p 4000
     ```
 
-for more information, please check the [image.sh](./manual/image.sh) file.
+The server listens on `http://localhost:4000`.
+
+## Authentication
+
+All endpoints (except Devise routes) require a valid JWT in the `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+### Register
+
+```bash
+curl -X POST http://localhost:4000/users \
+  -H "Content-Type: application/json" \
+  -d '{"user": {"email": "user@example.com", "password": "password", "password_confirmation": "password"}}'
+```
+
+Confirm your email using the link sent to your inbox, then sign in.
+
+### Sign In
+
+```bash
+curl -X POST http://localhost:4000/users/sign_in \
+  -H "Content-Type: application/json" \
+  -d '{"user": {"email": "user@example.com", "password": "password"}}' -i
+```
+
+The JWT is returned in the `Authorization` response header.
+
+### Sign Out
+
+```bash
+curl -X DELETE http://localhost:4000/users/sign_out \
+  -H "Authorization: Bearer <token>"
+```
+
+### Profile
+
+```bash
+curl http://localhost:4000/user/profile \
+  -H "Authorization: Bearer <token>"
+```
+
+## Image API
+
+### GET /image
+
+Pass the image URL and transform parameters as query string:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=300&resize[height]=300&toFormat=webp" \
+  -H "Authorization: Bearer <token>" \
+  --output result.webp
+```
+
+### POST /image
+
+Pass parameters as JSON body:
+
+```bash
+curl -X POST http://localhost:4000/image \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "url": "https://example.com/photo.jpg",
+    "toFormat": "webp",
+    "resize": {"width": 300, "height": 300}
+  }' --output result.webp
+```
+
+Transform parameter names match libvips method names (e.g. `sharpen`, `resize`, `rotate`, `toFormat`). See the `manual/` folder for more examples.
+
+## Running Tests
+
+```bash
+bin/rails test
+```
+
+With coverage report (output to `public/coverage/index.html`):
+
+```bash
+COVERAGE=1 bin/rails test
+```
+
+## Deployment
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for Kamal-based deployment instructions.
 
 ## License
 
 This project is licensed under the MIT License.
+

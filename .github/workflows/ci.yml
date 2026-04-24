@@ -20,6 +20,28 @@ jobs:
       - name: Scan for common Rails security vulnerabilities using static analysis
         run: bin/brakeman --no-pager
 
+  audit_gems:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Install bundler-audit
+        run: gem install bundler-audit
+
+      - name: Update advisory database
+        run: bundle-audit update
+
+      - name: Check gems for known CVEs
+        run: bundle-audit check
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -64,4 +86,13 @@ jobs:
         env:
           RAILS_ENV: test
           # REDIS_URL: redis://localhost:6379/0
+          COVERAGE: "1"
         run: bin/rails db:test:prepare test
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: public/coverage/
+          retention-days: 14
