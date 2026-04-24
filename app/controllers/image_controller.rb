@@ -6,36 +6,54 @@
 # }
 # /image?url=https://.....png&shrink[]=5&shrink[]=5&shrink[][xshrink]=50&sharpen[x1]=0.8&sharpen[sigma]=0.5
 
+require "resolv"
+
 class ImageController < ApplicationController
   before_action :authorize_request
 
+  MAX_RESPONSE_SIZE = 20.megabytes
+
+  BLOCKED_IP_RANGES = [
+    IPAddr.new("127.0.0.0/8"),   # loopback
+    IPAddr.new("10.0.0.0/8"),    # private class A
+    IPAddr.new("172.16.0.0/12"), # private class B
+    IPAddr.new("192.168.0.0/16"), # private class C
+    IPAddr.new("169.254.0.0/16"), # link-local / AWS metadata
+    IPAddr.new("::1"),           # IPv6 loopback
+    IPAddr.new("fc00::/7")       # IPv6 unique local
+  ].freeze
+
   # GET /index
   def index
-    # Get image URL from query string
     url = request.params.delete(:url)
-    if url.blank?
-      url = request.params.delete(:u)
-    end
+    url = request.params.delete(:u) if url.blank?
 
-    # Check if the URL is present
     if url.blank?
       render json: { error: I18n.translate("errors.url_parameter_is_required") }, status: :bad_request
       return
     end
 
-    # Check if the URL is valid
     unless url =~ URI::DEFAULT_PARSER.make_regexp
       render json: { error: I18n.translate("errors.invalid_url") }, status: :bad_request
       return
     end
 
-    # Download the image from the URL
+    if ssrf_blocked?(url)
+      render json: { error: I18n.translate("errors.invalid_url") }, status: :bad_request
+      return
+    end
+
     response_body = nil
     response_headers = nil
     begin
-      response = Faraday.get(url)  # Download the image from the URL
+      response = Faraday.get(url)
       response_headers = response.headers
       response_body = response.body
+
+      if response_body.bytesize > MAX_RESPONSE_SIZE
+        render json: { error: I18n.translate("errors.image_too_large") }, status: :unprocessable_entity
+        return
+      end
     rescue => e
       render json: { error: I18n.translate("errors.failed_to_download_image", message: e.message) }, status: :unprocessable_entity
       return
@@ -73,6 +91,20 @@ class ImageController < ApplicationController
   end
 
   private
+
+  def ssrf_blocked?(url)
+    uri = URI.parse(url)
+    return true unless uri.scheme.in?(%w[http https])
+
+    addresses = Resolv.getaddresses(uri.host)
+    return false if addresses.empty? # DNS won't resolve → Faraday will fail naturally
+
+    addresses.any? do |addr|
+      BLOCKED_IP_RANGES.any? { |range| range.include?(IPAddr.new(addr)) }
+    end
+  rescue
+    true
+  end
 
   def get_transform_methods
     params.permit!.to_h.except(:controller, :action, :url, :u, :image, :flatten)
@@ -119,7 +151,6 @@ class ImageController < ApplicationController
       next if params.blank?
 
       if image.respond_to?(method) && image.method(method).parameters.any?
-        puts "applying #{method} with params #{params}"
 
         if method == "rotate" && image.bands == 4 && params.last.present?
           params.last[:background].push(255)
@@ -138,7 +169,7 @@ class ImageController < ApplicationController
             image = image.send(method, convert_params_value_string_to_number(params))
           end
         rescue => e
-          puts "Error applying #{method} with params #{params}: #{e.message}"
+          Rails.logger.warn "Error applying #{method} with params #{params}: #{e.message}"
         end
       end
     end
