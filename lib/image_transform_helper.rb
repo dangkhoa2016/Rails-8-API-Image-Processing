@@ -2,9 +2,9 @@ class ImageTransformHelper
   class << self
     def get_transform_params(transform_methods, original_format, current_size)
       bg = determine_background_color(transform_methods)
-      result_format = determine_image_format(transform_methods)
+      image_format = determine_image_format(transform_methods)
 
-      image_format = determine_result_format(original_format, result_format)
+      result_format = determine_result_format(original_format, image_format)
 
       apply_image_format(transform_methods, image_format, result_format)
 
@@ -80,7 +80,8 @@ class ImageTransformHelper
     end
 
     def calculate_scale(width, height, current_size)
-      scale_width = 0, scale_height = 0
+      scale_width = 0
+      scale_height = 0
 
       if width.to_f > 0
         scale_width = width.to_f / current_size[0]
@@ -167,7 +168,7 @@ class ImageTransformHelper
       if image_format.size == 1
         first = image_format.first
         if first.is_a?(String)
-          result_format = first.downcase
+          transform_methods[:image_format][:format] = first.downcase
         elsif first.is_a?(Hash)
           apply_hash_image_format_fields(transform_methods, first)
         end
