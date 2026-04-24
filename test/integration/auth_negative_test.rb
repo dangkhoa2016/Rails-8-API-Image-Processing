@@ -88,4 +88,16 @@ class AuthNegativeTest < ActionDispatch::IntegrationTest
     assert_equal false, body.dig("token_info", "expired")
     assert JwtDenylist.exists?(jti: payload.fetch("jti"))
   end
+
+  test "token for missing user returns unauthorized" do
+    user = confirmed_user("missing-user@example.local")
+    headers = jwt_auth_headers_for(user)
+
+    user.destroy!
+
+    get "/image", params: { url: "https://test.local/images/sample.jpeg" }, headers: headers, as: :json
+
+    assert_response :unauthorized
+    assert_equal({ "error" => "Unauthorized" }, json_response)
+  end
 end

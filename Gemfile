@@ -53,6 +53,10 @@ group :development, :test do
   gem "simplecov-console", require: false
 end
 
+group :test do
+  # Minitest 6 no longer ships minitest/mock, but this suite still uses Object#stub.
+  gem "minitest", "~> 5.25"
+end
 
 gem "devise", "~> 4.9"
 
