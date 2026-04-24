@@ -1,8 +1,6 @@
-require_relative "../lib/exception_middleware"
 require_relative "boot"
 require "rails/all"
 require "dotenv/load" if Rails.env.development? || Rails.env.test?
-require "color_conversion"
 
 # Require the gems listed in Gemfile, including any gems
 # you"ve limited to :test, :development, or :production.
@@ -30,6 +28,8 @@ module Rails8APIImageProcessing
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
-    config.middleware.use ::ExceptionMiddleware
+
+    # Rack::Attack is not auto-loaded in API-only mode; mount it explicitly.
+    config.middleware.use Rack::Attack
   end
 end
