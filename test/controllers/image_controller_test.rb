@@ -74,7 +74,7 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "get index with valid token blocks urls that resolve to private addresses" do
-    assert_ssrf_blocked("https://blocked.local/images/sample.jpeg", addresses: ["127.0.0.1"])
+    assert_ssrf_blocked("https://blocked.local/images/sample.jpeg", addresses: [ "127.0.0.1" ])
   end
 
   test "get index with valid token blocks urls when ssrf resolution fails" do
@@ -196,5 +196,238 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     result = ImageController.new.send(:apply_image_transformations, image, { "explode" => "1" })
 
     assert_same image, result
+  end
+
+  # ---------------------------------------------------------------------------
+  # Geometry tests
+  # ---------------------------------------------------------------------------
+
+  test "resize to explicit dimensions returns correct output size" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, resize: { width: 200, height: 200 } }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert img.width <= 200, "width #{img.width} should be <= 200"
+    assert img.height <= 200, "height #{img.height} should be <= 200"
+    assert img.width == 200 || img.height == 200, "at least one dimension should equal the target"
+  end
+
+  test "rotate 180 degrees preserves image dimensions" do
+    url = "https://test.local/images/sample.png"
+    faraday_response = fixture_response("sample.png", "png", expect_width: 500, expect_height: 714)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, rotate: "180" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert_equal 500, img.width
+    assert_equal 714, img.height
+  end
+
+  test "rotate 270 degrees swaps width and height" do
+    url = "https://test.local/images/sample.png"
+    faraday_response = fixture_response("sample.png", "png", expect_width: 500, expect_height: 714)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, rotate: "270" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert_equal 714, img.width
+    assert_equal 500, img.height
+  end
+
+  test "flip horizontal preserves image dimensions" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, flip: "horizontal" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert_equal 400, img.width
+    assert_equal 713, img.height
+  end
+
+  test "flip vertical preserves image dimensions" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, flip: "vertical" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert_equal 400, img.width
+    assert_equal 713, img.height
+  end
+
+  test "crop returns the requested sub-region dimensions" do
+    url = "https://test.local/images/quadrants.png"
+    faraday_response = fixture_response("quadrants.png", "png", expect_width: 200, expect_height: 200)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, crop: [ "0", "0", "120", "80" ] }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert_equal 120, img.width
+    assert_equal 80, img.height
+  end
+
+  # ---------------------------------------------------------------------------
+  # Pixel-level & rendering tests
+  # ---------------------------------------------------------------------------
+
+  # quadrants.png layout (each quadrant is 100x100):
+  #   top-left     (0,0):    RED    [255,   0,   0]
+  #   top-right  (100,0):    GREEN  [  0, 255,   0]
+  #   bottom-left (0,100):   BLUE   [  0,   0, 255]
+  #   bottom-right(100,100): YELLOW [255, 255,   0]
+
+  test "flip horizontal moves top-right quadrant color to top-left corner" do
+    url = "https://test.local/images/quadrants.png"
+    faraday_response = fixture_response("quadrants.png", "png", expect_width: 200, expect_height: 200)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, flip: "horizontal" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    # Sample a few pixels in from the edge to avoid bilinear interpolation artefacts.
+    # After flip=horizontal, left side holds what was the right (GREEN) quadrant.
+    assert_equal [ 0, 255, 0 ], rgb_at(img, 5, 5), "left area should be GREEN after horizontal flip"
+    # Right side holds what was the left (RED) quadrant.
+    assert_equal [ 255, 0, 0 ], rgb_at(img, img.width - 6, 5), "right area should be RED after horizontal flip"
+  end
+
+  test "flip vertical moves bottom-left quadrant color to top-left corner" do
+    url = "https://test.local/images/quadrants.png"
+    faraday_response = fixture_response("quadrants.png", "png", expect_width: 200, expect_height: 200)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, flip: "vertical" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    # After flip=vertical, top area holds what was the bottom (BLUE) quadrant.
+    assert_equal [ 0, 0, 255 ], rgb_at(img, 5, 5), "top area should be BLUE after vertical flip"
+    # Bottom area holds what was the top (RED) quadrant.
+    assert_equal [ 255, 0, 0 ], rgb_at(img, 5, img.height - 6), "bottom area should be RED after vertical flip"
+  end
+
+  test "rotate 180 moves bottom-right quadrant color to top-left corner" do
+    url = "https://test.local/images/quadrants.png"
+    faraday_response = fixture_response("quadrants.png", "png", expect_width: 200, expect_height: 200)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, rotate: "180" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    # After 180° rotation, top-left area holds what was the bottom-right (YELLOW) quadrant.
+    # Sample a few pixels in from the corner to avoid bilinear interpolation edge bleed.
+    assert_equal [ 255, 255, 0 ], rgb_at(img, 5, 5), "top-left area should be YELLOW after 180° rotate"
+    # Bottom-right area holds what was top-left (RED) quadrant.
+    assert_equal [ 255, 0, 0 ], rgb_at(img, img.width - 6, img.height - 6), "bottom-right area should be RED after 180° rotate"
+  end
+
+  test "flatten removes alpha channel from transparent image" do
+    url = "https://test.local/images/alpha.png"
+    faraday_response = fixture_response("alpha.png", "png", expect_width: 100, expect_height: 100)
+
+    # params[:flatten] is excluded from get_transform_methods; the controller
+    # handles flatten via ImageTransformHelper.get_transform_params automatically
+    # when converting an RGBA source to a format that has no alpha (jpeg).
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, format: "jpg" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    # JPEG has no alpha — output should be 3 bands (RGB)
+    assert_equal 3, img.bands, "output should have 3 bands after alpha flatten"
+  end
+
+  test "format=png returns png content-type" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, format: "png" }, headers: @headers
+    end
+
+    assert_response :success
+    assert_equal "image/png", response.headers["Content-Type"]
+    img = load_vips_image(response.body)
+    assert_operator img.width, :>, 0
+  end
+
+  test "format=webp returns webp content-type" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, format: "webp" }, headers: @headers
+    end
+
+    assert_response :success
+    assert_equal "image/webp", response.headers["Content-Type"]
+    img = load_vips_image(response.body)
+    assert_operator img.width, :>, 0
+  end
+
+  # ---------------------------------------------------------------------------
+  # Error & edge case tests
+  # ---------------------------------------------------------------------------
+
+  test "crop with out-of-bounds coordinates does not return 500" do
+    url = "https://test.local/images/quadrants.png"
+    faraday_response = fixture_response("quadrants.png", "png", expect_width: 200, expect_height: 200)
+
+    stub_download(faraday_response) do
+      # crop far outside the 200x200 image boundaries
+      get image_index_url, params: { url: url, crop: [ "0", "0", "9999", "9999" ] }, headers: @headers
+    end
+
+    # should either succeed (clamped) or return a structured error, never 500
+    assert_not_equal 500, response.status
+  end
+
+  test "resize with zero width does not return 500" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, resize: { width: 0, height: 0 } }, headers: @headers
+    end
+
+    assert_not_equal 500, response.status
+  end
+
+  test "unsupported output format returns unprocessable entity" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, format: "xyz" }, headers: @headers
+    end
+
+    assert_response :unprocessable_entity
   end
 end
