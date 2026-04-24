@@ -22,6 +22,7 @@ require "devise"
 require "devise/jwt/test_helpers"
 require "securerandom"
 require "webmock/minitest"
+require_relative "support/image_test_helpers"
 
 # Allow Faraday test adapter (in-process stubs) while blocking real network calls
 WebMock.disable_net_connect!(
@@ -43,6 +44,7 @@ end
 
 class ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
+  include ImageTestHelpers
 
   def json_response
     JSON.parse(response.body)
