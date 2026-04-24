@@ -1,5 +1,7 @@
 class UsersController < ApplicationController
-  before_action :authorize_request
+  include UserAccessControl
+
+  before_action :authorize_user_access
   before_action :find_user, only: %i[show update destroy]
 
   # GET /users
@@ -45,13 +47,7 @@ class UsersController < ApplicationController
   private
 
   def find_user
-    if params[:id]
-      @user = User.find_by_id!(params[:id])
-    else
-      @user = User.find_by_email!(params[:email])
-    end
-  rescue ActiveRecord::RecordNotFound
-    render json: { errors: I18n.t("errors.not_found", model: User.model_name.human) }, status: :not_found
+    @user = User.find_by_id!(params[:id])
   end
 
   def user_params

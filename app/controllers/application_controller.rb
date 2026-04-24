@@ -5,11 +5,11 @@ class ApplicationController < ActionController::API
 
   # Catch all types of errors and display messages to the user
   rescue_from StandardError, with: :handle_internal_error
+  rescue_from JWT::DecodeError, with: :handle_invalid_token
   rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
   rescue_from ActionController::ParameterMissing, with: :parameter_missing
   # rescue_from ActionController::RoutingError, with: :route_not_found
   rescue_from ActionController::UnknownFormat, with: :route_not_found
-  rescue_from Exception, with: :handle_internal_error
 
   def decode_token(token_string)
     begin
@@ -23,22 +23,6 @@ class ApplicationController < ActionController::API
     end
   end
 
-  def authorize_request
-    if current_user.blank?
-      return render json: { errors: I18n.t("errors.unauthorized") }, status: :unauthorized
-    end
-
-    if action_name.in?(%w[update destroy show])
-      if current_user.id.to_s == params[:id].to_s
-        return
-      end
-    end
-
-    unless current_user.admin?
-      render json: { errors: I18n.t("errors.must_be_adminstrator") }, status: :unauthorized
-    end
-  end
-
   # Handle errors for path not found
   def route_not_found
     logger.error "Route not found: #{request.url}"
@@ -47,17 +31,45 @@ class ApplicationController < ActionController::API
 
   private
 
+  def authorize_request
+    token = get_token_from_request_headers
+    if token.blank?
+      render json: { error: I18n.translate("errors.unauthorized") }, status: :unauthorized
+      return
+    end
+
+    payload, = decode_token(token)
+    user_id = payload["sub"] || payload[:sub]
+    @current_user = User.find_by(id: user_id)
+
+    return if @current_user.present?
+
+    render json: { error: I18n.translate("errors.unauthorized") }, status: :unauthorized
+  rescue JWT::DecodeError, JWT::VerificationError, JWT::ExpiredSignature, JWT::IncorrectAlgorithm,
+         JWT::ImmatureSignature, JWT::InvalidIssuerError, JWT::InvalidIatError, JWT::InvalidAudError,
+         JWT::InvalidSubError, JWT::InvalidJtiError, JWT::InvalidPayload
+    render json: { error: I18n.translate("errors.unauthorized") }, status: :unauthorized
+  end
+
+  def get_token_from_request_headers
+    Warden::JWTAuth::HeaderParser.from_env(request.env)
+  end
+
   def configure_permitted_parameters
     fields = [ :first_name, :last_name, :username, :email, :password, :password_confirmation ]
     devise_parameter_sanitizer.permit(:sign_up, keys: fields)
-    devise_parameter_sanitizer.permit(:account_update, keys: fields)
-    # devise_parameter_sanitizer.permit(:account_update, keys: fields + [:current_password])
+    devise_parameter_sanitizer.permit(:account_update, keys: fields + [ :current_password ])
   end
 
-   # Handle internal errors
-   def handle_internal_error(exception)
-    logger.error "Internal error: #{exception.message}", exception.backtrace.join("\n")
-    render json: { error: I18n.translate("errors.internal_found") }, status: 500
+  # Handle internal errors
+  def handle_internal_error(exception)
+    logger.error "Internal error: #{exception.message}\n#{Array(exception.backtrace).join("\n")}"
+    render json: { error: I18n.translate("errors.internal_error") }, status: 500
+  end
+
+  def handle_invalid_token(exception)
+    logger.error "Invalid token: #{exception.message}"
+    render json: { error: I18n.translate("jwt.decode_error") }, status: :unprocessable_entity
   end
 
   # Handle record not found errors
@@ -68,6 +80,7 @@ class ApplicationController < ActionController::API
 
   # Handle parameter missing errors
   def parameter_missing(exception)
-    render json: { error: I18n.translate("errors.parameter_mifound") }, status: :unprocessable_entity
+    logger.error "Parameter missing: #{exception.message}"
+    render json: { error: I18n.translate("errors.parameter_missing") }, status: :unprocessable_entity
   end
 end

@@ -1,5 +1,4 @@
 Rails.application.routes.draw do
-  resources :home, only: [ :index ]
   resources :image, only: [ :index ]
 
   get "image" => "image#index"
@@ -15,8 +14,10 @@ Rails.application.routes.draw do
   }
 
   devise_scope :user do
+    # Primary profile endpoint.
     get "user/profile" => "users/sessions#show"
-    get "user/me" => "users/sessions#show"
+    # Compatibility aliases — deprecated. Remove after confirming no active clients rely on them.
+    get "user/me"     => "users/sessions#show"
     get "user/whoami" => "users/sessions#show"
   end
 
