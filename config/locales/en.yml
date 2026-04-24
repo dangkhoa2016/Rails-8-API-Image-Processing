@@ -46,6 +46,7 @@ en:
     url_parameter_is_required: "URL parameter is required"
     invalid_url: "Invalid URL"
     failed_to_download_image: "Failed to download image"
+    image_too_large: "Image is too large"
 
   user:
     deleted: User [%{email}] with id [%{id}] has been deleted

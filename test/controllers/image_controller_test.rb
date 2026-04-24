@@ -42,6 +42,32 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_response :bad_request
   end
 
+  test "get index with valid token blocks urls that resolve to private addresses" do
+    url = "https://blocked.local/images/sample.jpeg"
+
+    Resolv.stub(:getaddresses, ["127.0.0.1"]) do
+      Faraday.stub(:get, ->(_request_url) { flunk "Faraday should not be called for blocked SSRF urls" }) do
+        get image_index_url, params: { url: url }, headers: @headers
+      end
+    end
+
+    assert_response :bad_request
+    assert_equal I18n.translate("errors.invalid_url"), json_response.fetch("error")
+  end
+
+  test "get index with valid token blocks urls when ssrf resolution fails" do
+    url = "https://resolver-error.local/images/sample.jpeg"
+
+    Resolv.stub(:getaddresses, ->(_host) { raise StandardError, "dns failure" }) do
+      Faraday.stub(:get, ->(_request_url) { flunk "Faraday should not be called when SSRF detection fails closed" }) do
+        get image_index_url, params: { url: url }, headers: @headers
+      end
+    end
+
+    assert_response :bad_request
+    assert_equal I18n.translate("errors.invalid_url"), json_response.fetch("error")
+  end
+
   test "get index with valid 'token' and with valid 'url' parameter" do
     url = "https://test.local/images/sample.jpeg"
     faraday_response = stub_request("sample.jpeg", "jpeg", 400, 713)
@@ -100,6 +126,19 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
       I18n.translate("errors.failed_to_download_image", message: "download failed"),
       json_response.fetch("error")
     )
+  end
+
+  test "get index with valid token returns unprocessable entity when response exceeds max size" do
+    url = "https://test.local/images/large.jpeg"
+    oversized_body = ("a" * (ImageController::MAX_RESPONSE_SIZE + 1)).b
+    faraday_response = Struct.new(:headers, :body).new({ "content-type" => "image/jpeg" }, oversized_body)
+
+    Faraday.stub(:get, faraday_response) do
+      get image_index_url, params: { url: url }, headers: @headers
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal I18n.translate("errors.image_too_large"), json_response.fetch("error")
   end
 
   test "get index with valid token applies quality when q parameter is present" do

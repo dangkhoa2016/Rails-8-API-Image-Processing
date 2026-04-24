@@ -1,7 +1,5 @@
 Rails.application.routes.draw do
-  resources :image, only: [ :index ]
-
-  get "image" => "image#index"
+  get  "image" => "image#index", as: :image_index
   post "image" => "image#index"
 
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

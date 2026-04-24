@@ -10,8 +10,6 @@ class ImageTransformHelper
 
       apply_flatten_if_required(transform_methods, result_format, bg) if result_format.present?
 
-      puts "get_transform_params: #{transform_methods}"
-
       if transform_methods.key?(:rotate)
         transform_methods[:rotate] = modify_rotation(transform_methods[:rotate])
       end
