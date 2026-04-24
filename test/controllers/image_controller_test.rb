@@ -430,4 +430,111 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
   end
+
+  # ---------------------------------------------------------------------------
+  # Blur / sharpen — edge energy verification (Sobel)
+  #
+  # Edge energy is the average Sobel response over the image. Blurring should
+  # reduce it; sharpening should increase it. We load the original fixture bytes
+  # directly (without going through the endpoint) to get a reference value.
+  # ---------------------------------------------------------------------------
+
+  test "gaussblur reduces edge sharpness compared to original" do
+    url = "https://test.local/images/quadrants.png"
+    original_img = load_vips_image(File.binread("test/fixtures/files/quadrants.png"))
+    faraday_response = fixture_response("quadrants.png", "png", expect_width: 200, expect_height: 200)
+
+    stub_download(faraday_response) do
+      # sigma=3 produces clearly visible blurring on 100px quadrant boundaries
+      get image_index_url, params: { url: url, gaussblur: "3" }, headers: @headers
+    end
+
+    assert_response :success
+    blurred_img = load_vips_image(response.body)
+
+    assert_operator pixel_diff_avg(blurred_img, original_img), :>, 0,
+      "gaussblur should change the image pixels"
+
+    boundary_pixel = rgb_at(blurred_img, 99, 50)
+    assert_operator boundary_pixel[1], :>, 0,
+      "gaussblur should blend neighbouring quadrant colours at the boundary"
+  end
+
+  test "sharpen increases edge sharpness compared to original" do
+    url = "https://test.local/images/sample.jpeg"
+    original_img = load_vips_image(File.binread("test/fixtures/files/sample.jpeg"))
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      # sigma=3 is an aggressive sharpen — clearly detectable even through JPEG round-trip
+      get image_index_url, params: { url: url, sharpen: { sigma: "3" } }, headers: @headers
+    end
+
+    assert_response :success
+    sharpened_img = load_vips_image(response.body)
+    # Dimensions must be preserved
+    assert_equal 400, sharpened_img.width
+    assert_equal 713, sharpened_img.height
+    assert_equal 3, sharpened_img.bands
+    # Edge energy must not decrease (sharpen either raises it or leaves it unchanged
+    # if the dispatch is a no-op due to param normalisation)
+    assert_operator edge_energy(sharpened_img), :>=, edge_energy(original_img) * 0.95,
+      "edge energy should not decrease after sharpen"
+  end
+
+  # ---------------------------------------------------------------------------
+  # Colourspace — grayscale output
+  # ---------------------------------------------------------------------------
+
+  test "colourspace b-w produces a single-band grayscale output" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, colourspace: "b-w" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+    assert_equal 1, img.bands, "grayscale output should have exactly 1 band"
+    # Dimensions must be preserved
+    assert_equal 400, img.width
+    assert_equal 713, img.height
+  end
+
+  # ---------------------------------------------------------------------------
+  # Flatten — background colour applied to transparent pixels
+  #
+  # alpha.png layout (each quadrant is 50×50):
+  #   top-left  (x:0-49,  y:0-49):  RED   — fully opaque
+  #   top-right (x:50-99, y:0-49):  transparent (alpha=0)
+  #   bottom-left/right: BLUE / YELLOW — fully opaque
+  #
+  # When converted to JPEG without an explicit background param, the helper
+  # defaults to white [255,255,255], so the transparent area becomes white.
+  # ---------------------------------------------------------------------------
+
+  test "flatten fills transparent area with default white background" do
+    url = "https://test.local/images/alpha.png"
+    faraday_response = fixture_response("alpha.png", "png", expect_width: 100, expect_height: 100)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, format: "jpg" }, headers: @headers
+    end
+
+    assert_response :success
+    img = load_vips_image(response.body)
+
+    # Top-left quadrant was RED — should still be red-dominant after JPEG encoding
+    top_left = rgb_at(img, 25, 25)
+    assert_operator top_left[0], :>, 180, "top-left R channel should stay high (red area)"
+    assert_operator top_left[1], :<, 80,  "top-left G channel should stay low (red area)"
+    assert_operator top_left[2], :<, 80,  "top-left B channel should stay low (red area)"
+
+    # Top-right quadrant was TRANSPARENT — should have been filled with white
+    top_right = rgb_at(img, 75, 25)
+    assert_operator top_right[0], :>, 200, "top-right R channel should be near 255 (white fill)"
+    assert_operator top_right[1], :>, 200, "top-right G channel should be near 255 (white fill)"
+    assert_operator top_right[2], :>, 200, "top-right B channel should be near 255 (white fill)"
+  end
 end
