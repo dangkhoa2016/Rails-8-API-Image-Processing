@@ -74,6 +74,10 @@ class ImageController < ApplicationController
       # Loop through query string parameters and apply corresponding operations
       image = apply_image_transformations(image, transform_methods)
 
+      if [ "jpeg", "jpg" ].include?(result_format) && image.format != :uchar
+        image = image.cast(:uchar)
+      end
+
       # Save the image to memory
       save_params = ".#{result_format}"
       if quality.present? && quality > 0

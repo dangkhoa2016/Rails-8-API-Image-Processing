@@ -17,4 +17,10 @@ module ImageTestHelpers
     diff = (actual.cast("float") - expected.cast("float")).abs
     diff.avg
   end
+
+  # Edge sharpness score using the Sobel operator (higher = sharper edges).
+  # Normalises to uchar first so it works for both 8-bit and 16-bit sources.
+  def edge_energy(img)
+    img.cast(:uchar).colourspace(:b_w).sobel.avg
+  end
 end
