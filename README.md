@@ -61,6 +61,18 @@ A Rails 8 API server that downloads and transforms images using [libvips](https:
     cp .env.sample .env
     ```
 
+  Resize safety limits are configurable via env to protect the server from
+  extremely large render requests:
+
+  ```bash
+  IMAGE_MAX_RESIZE_WIDTH=4096
+  IMAGE_MAX_RESIZE_HEIGHT=4096
+  IMAGE_MAX_RESIZE_SCALE=8
+  ```
+
+  Requests that exceed any of these limits return `422 Unprocessable Content`
+  before libvips starts an expensive resize.
+
 5. Set up the database and seed an admin user:
     ```bash
     bin/rails db:create db:migrate db:seed
@@ -158,6 +170,31 @@ curl -X POST http://localhost:4000/image \
 ```
 
 Transform parameter names match libvips method names (e.g. `sharpen`, `resize`, `rotate`, `toFormat`). See the `manual/` folder for more examples.
+
+### Resize Safety Limits
+
+To avoid requests such as `resize[width]=99999&resize[height]=99999` or very
+large scale factors, the API validates resize input against these env-based
+limits:
+
+| Env | Default | Purpose |
+|-----|---------|---------|
+| `IMAGE_MAX_RESIZE_WIDTH` | `4096` | Maximum accepted requested width |
+| `IMAGE_MAX_RESIZE_HEIGHT` | `4096` | Maximum accepted requested height |
+| `IMAGE_MAX_RESIZE_SCALE` | `8` | Maximum accepted scale factor |
+
+Example failure:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=99999&resize[height]=99999" \
+  -H "Authorization: Bearer <token>"
+```
+
+Response:
+
+```json
+{"error":"Resize exceeds allowed limits (max width: 4096, max height: 4096, max scale: 8)"}
+```
 
 ### AVIF / HEIF Examples
 

@@ -1,5 +1,11 @@
 class ImageTransformHelper
+  class InvalidResizeLimitsError < StandardError; end
+
   class << self
+    DEFAULT_MAX_RESIZE_WIDTH = 4096
+    DEFAULT_MAX_RESIZE_HEIGHT = 4096
+    DEFAULT_MAX_RESIZE_SCALE = 8.0
+
     def get_transform_params(transform_methods, original_format, current_size)
       bg = determine_background_color(transform_methods)
       image_format = determine_image_format(transform_methods)
@@ -19,6 +25,18 @@ class ImageTransformHelper
       end
 
       transform_methods
+    end
+
+    def max_resize_width
+      positive_integer_env("IMAGE_MAX_RESIZE_WIDTH", DEFAULT_MAX_RESIZE_WIDTH)
+    end
+
+    def max_resize_height
+      positive_integer_env("IMAGE_MAX_RESIZE_HEIGHT", DEFAULT_MAX_RESIZE_HEIGHT)
+    end
+
+    def max_resize_scale
+      positive_float_env("IMAGE_MAX_RESIZE_SCALE", DEFAULT_MAX_RESIZE_SCALE)
     end
 
     private
@@ -48,11 +66,14 @@ class ImageTransformHelper
 
       if resize.is_a?(Array)
         scale, options = resize
-        if scale.to_f > 0.0 && scale.to_f <= 10
+        if scale.to_f > 0.0 && (options.is_a?(Hash) || scale.to_f <= 10)
+          validate_resize_limits!(scale: scale)
           [ scale.to_f, options || {} ]
         else # width and height
+          validate_resize_limits!(width: scale, height: options)
           scale = calculate_scale(scale.to_i, options.to_i, current_size)
           if scale
+            validate_resize_limits!(scale: scale)
             [ scale, {} ]
           else
             []
@@ -63,18 +84,55 @@ class ImageTransformHelper
         height = resize[:height]
         scale = resize[:scale]
         options = resize.except(:width, :height, :scale)
+        validate_resize_limits!(width: width, height: height)
+
         if !scale
           scale = calculate_scale(width, height, current_size)
+        elsif scale.to_f > 0.0
+          validate_resize_limits!(scale: scale)
+          scale = scale.to_f
         end
 
         if scale
+          validate_resize_limits!(scale: scale) if scale.to_f > 0.0
           [ scale, options || {} ]
         else
           []
         end
       else
+        validate_resize_limits!(scale: resize) if resize.to_f > 0.0
         resize
       end
+    end
+
+    def validate_resize_limits!(width: nil, height: nil, scale: nil)
+      too_wide = width.to_f > max_resize_width
+      too_tall = height.to_f > max_resize_height
+      too_large_scale = scale.to_f > max_resize_scale
+
+      return unless too_wide || too_tall || too_large_scale
+
+      raise InvalidResizeLimitsError,
+        I18n.translate(
+          "errors.invalid_resize_limits",
+          max_width: max_resize_width,
+          max_height: max_resize_height,
+          max_scale: display_number(max_resize_scale)
+        )
+    end
+
+    def positive_integer_env(key, default)
+      value = ENV[key].to_i
+      value.positive? ? value : default
+    end
+
+    def positive_float_env(key, default)
+      value = ENV[key].to_f
+      value.positive? ? value : default
+    end
+
+    def display_number(value)
+      value.to_i == value ? value.to_i : value
     end
 
     def calculate_scale(width, height, current_size)
