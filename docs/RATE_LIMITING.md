@@ -22,6 +22,7 @@ Rate limiting is handled by the **rack-attack 6.8** gem — a Rack middleware th
 | `sign_in/email` | `/users/sign_in` | POST | 10 requests | 60 seconds | Email in request body |
 | `registration/ip` | `/users` | POST | 10 requests | 1 hour | IP address |
 | `password_reset/ip` | `/users/password` | POST | 5 requests | 1 hour | IP address |
+| `image/ip` | `/image` | GET | 30 requests | 60 seconds | IP address |
 
 Important behavior:
 - Rack::Attack runs before controller logic, so requests that later return `401` or `422` still increment counters.
@@ -125,6 +126,17 @@ done
 
 Expected output: `401 401 401 401 401 429`
 
+```bash
+# Trigger image/ip (31 attempts, the 31st should return 429)
+for i in $(seq 1 31); do
+  echo "--- Request $i ---"
+  curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/image?url=https://example.com/image.png"
+  echo
+done
+```
+
+Expected output: first 30 requests are non-429, request 31 returns `429`
+
 ---
 
 ## Notes When Deploying Behind Reverse Proxy / Load Balancer
@@ -173,4 +185,4 @@ teardown { Rack::Attack.enabled = true }
 | ------------------------------------- | ----------------------------------------------------------------- |
 | `config/initializers/rack_attack.rb`  | All configuration: safelists, throttles, throttled_responder      |
 | `config/application.rb`               | `config.middleware.use Rack::Attack` — required for API-only apps |
-| `test/integration/rate_limit_test.rb` | 5 tests covering all throttle rules                               |
+| `test/integration/rate_limit_test.rb` | 7 tests covering auth and image throttle rules                    |
