@@ -11,9 +11,7 @@ This guide explains how to deploy the application to a production server using *
 - A Linux server with SSH access (user `root` or a user with sudo privileges)
 - A domain/hostname pointing to the server’s IP (for Let's Encrypt SSL)
 
-The production image already bundles `sqlite3`, `curl`, and the small runtime
-packages needed by the app, so no extra native dependency setup is required on
-the target server beyond Docker itself.
+The production image already bundles `libvips`, `sqlite3`, and Debian `x265`, so no extra native dependency setup is required on the target server beyond Docker itself.
 
 ---
 
@@ -161,6 +159,9 @@ Refer to `.env.sample` for app-level defaults and to `config/deploy.yml` for dep
 | `DEVISE_JWT_SECRET_KEY` | Recommended | falls back to `secret_key_base` | Rotate independently from master key      |
 | `CORS_ALLOWED_ORIGINS`  | Recommended | `http://localhost:3000`         | Comma-separated browser origins allowed by Rack::Cors |
 | `DEVISE_MAILER_SENDER`  | Recommended | `noreply@example.com`           | Change to a real sender domain/address    |
+| `IMAGE_MAX_RESIZE_WIDTH` | Optional    | `4096`                          | Reject oversized resize width requests early |
+| `IMAGE_MAX_RESIZE_HEIGHT` | Optional   | `4096`                          | Reject oversized resize height requests early |
+| `IMAGE_MAX_RESIZE_SCALE` | Optional    | `8`                             | Reject oversized scalar resize requests early |
 | `SOLID_QUEUE_IN_PUMA`   | Optional    | `true`                          | Set `false` if using separate job workers |
 | `JOB_CONCURRENCY`       | Optional    | `1`                             | Number of Solid Queue worker threads      |
 | `WEB_CONCURRENCY`       | Optional    | `1`                             | Increase if server has multiple CPUs      |
@@ -169,17 +170,21 @@ Refer to `.env.sample` for app-level defaults and to `config/deploy.yml` for dep
 Production boot also logs warnings if `DEVISE_JWT_SECRET_KEY` is missing or if
 `DEVISE_MAILER_SENDER` is still left at an example.com-style placeholder.
 
-If a browser client runs on a different origin and needs to read the
-`Authorization` response header from sign-in responses, update
-`config/initializers/cors.rb` to expose that header explicitly. The current CORS
-setup allows configured origins but does not expose custom response headers to
-cross-origin browser JavaScript.
+If you plan to host a browser client on a different origin and want that client
+to read response headers such as `Authorization`, `X-Image-Width`, or
+`X-Image-Height`, update `config/initializers/cors.rb` to expose those headers
+explicitly. The current default CORS setup allows requests from configured
+origins but does not expose those response headers to cross-origin browser JS.
 
 ---
 
 ## SQLite and persistence
 
 Production SQLite data is stored in Docker volume `rails_8_api_image_processing_storage` → mounted at `/rails/storage` inside the container. The app uses multiple SQLite files there: `production.sqlite3`, `production_cache.sqlite3`, `production_queue.sqlite3`, and `production_cable.sqlite3`.
+
+The app also ships static smoke-test pages at `/test-render.html` (English) and
+`/test-render.vi.html` (Vietnamese). Serving them from the same Rails host avoids
+cross-origin header visibility issues during browser-based smoke tests.
 
 **Backup:**
 

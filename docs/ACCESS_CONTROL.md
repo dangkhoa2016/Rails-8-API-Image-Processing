@@ -34,6 +34,8 @@ This document describes the differences in access rights among three types of us
 | `/users/:id` | GET | ❌ 401 | ✅ if `id` matches | ✅ Any |
 | `/users/:id` | PUT | ❌ 401 | ✅ if `id` matches | ✅ Any |
 | `/users/:id` | DELETE | ❌ 401 | ✅ if `id` matches | ✅ Any |
+| `/image` | GET | ❌ 401 | ✅ | ✅ |
+| `/image` | POST | ❌ 401 | ✅ | ✅ |
 | Change user `role` | PUT `/users/:id` | ❌ | ❌ (Field ignored) | ✅ |
 
 For Devise-managed endpoints, the matrix assumes any required confirmation or reset token is present. `POST /users` is intended for guest registration; calling it while already authenticated is not part of the supported flow.
@@ -54,6 +56,7 @@ For Devise-managed endpoints, the matrix assumes any required confirmation or re
 - Calling `GET /user/profile` (or its compatibility aliases) with a missing, expired, or revoked token still receives a `422` response accompanied by **token metadata** (information about the token status, no user data).
 - Calling `GET /user/profile` with a malformed token returns `422 { "error": "Invalid token" }` instead of a `token_info` payload.
 - Calling any endpoint in the `UsersController` will return `401 Unauthorized`.
+- Calling protected endpoints such as `/image` or any endpoint in `UsersController` returns `401 Unauthorized`.
 
 ### Regular User (`role = "user"`)
 
@@ -90,6 +93,7 @@ Request → Warden / Devise resolves current_user from JWT
 ```
 
 Devise self-service account routes (`PUT/PATCH /users`, `DELETE /users`) do not use `authorize_user_access`; they are handled by `Users::RegistrationsController` and operate on the currently signed-in account.
+`ImageController` does not use `authorize_user_access`; it uses `before_action :authorize_request` directly. Missing, invalid, expired, or revoked JWTs on `GET /image` and `POST /image` are rejected with `401 Unauthorized` before any remote download or transform work starts.
 
 ---
 
@@ -119,4 +123,5 @@ This behavior is intentional: it allows the client to retrieve token status info
 - **Token Revocation:** After `DELETE /users/sign_out`, the JTI is recorded in the `jwt_denylists` table. Production recurring tasks can clean expired rows hourly via `config/recurring.yml`, and `bin/rails jwt_denylist:cleanup` remains available for manual cleanup.
 - **Profile aliases:** `/user/me` and `/user/whoami` currently exist for compatibility and hit the same action as `/user/profile`.
 - **Self-service update:** `PUT/PATCH /users` requires `current_password`; otherwise Devise returns validation errors such as `Current password can't be blank`.
-- **Rate limiting:** Applied to sign_in (5 req/60s per IP, 10 req/60s per email), registration (10 req/hr per IP), and password reset (5 req/hr per IP). Localhost is automatically safelisted.
+- **Image API roles:** `/image` is available to any authenticated user. Role-based authorization only applies to `UsersController` actions.
+- **Rate limiting:** Applied to sign_in (5 req/60s per IP, 10 req/60s per email), registration (10 req/hr per IP), password reset (5 req/hr per IP), and `GET /image` (30 req/60s per IP). Localhost is automatically safelisted.
