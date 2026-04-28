@@ -116,6 +116,9 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_equal "image/jpeg", content_type
     file_name = response_headers["Content-Disposition"]
     assert_equal "inline; filename=\"sample.jpeg\"", file_name
+    image = Vips::Image.new_from_buffer(response.body, "")
+    assert_equal image.width.to_s, response_headers["X-Image-Width"]
+    assert_equal image.height.to_s, response_headers["X-Image-Height"]
   end
 
   test "get index reuses cached remote image for repeated transforms on the same url" do

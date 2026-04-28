@@ -157,6 +157,9 @@ class ImageController < ApplicationController
       end
       image_buffer = image.write_to_buffer(save_params)
 
+      self.response.set_header("X-Image-Width", image.width.to_s)
+      self.response.set_header("X-Image-Height", image.height.to_s)
+
       # Return the image as binary data (image/jpeg)
       send_data image_buffer, type: "image/#{result_format}", disposition: "inline; filename=\"#{get_file_name_without_extension(url)}.#{result_format}\""
 
