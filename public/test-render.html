@@ -31,6 +31,14 @@
 				</p>
 			</header>
 
+			<div class="mb-6 rounded-[24px] border border-[#b45f35]/12 bg-amber-50/75 px-5 py-4 shadow-[0_16px_40px_rgba(180,95,53,0.08)]">
+				<p class="text-[0.78rem] font-extrabold uppercase tracking-[0.08em] text-[#8d4420]">Khuyến nghị khi test</p>
+				<p class="mt-2 max-w-5xl leading-7 text-stone-600">
+					Sau khi tạo danh sách test, hãy bấm nút chạy theo đúng <strong class="font-semibold text-stone-900">nhóm scenario</strong> bạn cần kiểm tra.
+					Cách này giúp tránh bắn toàn bộ request một lúc, giảm nguy cơ <strong class="font-semibold text-stone-900">rate limit</strong> và tiết kiệm tài nguyên khi bạn không cần test hết mọi nhóm.
+				</p>
+			</div>
+
 			<main class="grid gap-4 xl:grid-cols-12">
 				<section :class="[ui.panel, 'xl:col-span-6']">
 					<div class="mb-5 flex items-start gap-3.5">
@@ -111,7 +119,7 @@
 
 						<div class="flex flex-wrap gap-2.5">
 							<button :class="ui.primaryButton" type="submit" :disabled="!canRender || isRendering">
-								{{ isRendering ? 'Đang render...' : (items.length ? 'Render lại toàn bộ danh sách' : 'Tạo danh sách render') }}
+								{{ items.length ? 'Làm mới danh sách theo nhóm' : 'Tạo danh sách test theo nhóm' }}
 							</button>
 
 							<button :class="ui.secondaryButton" type="button" @click="clearRenderResults" :disabled="!items.length || isRendering">
@@ -139,7 +147,7 @@
 						<span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#b45f35]/14 font-extrabold text-[#8d4420]">3</span>
 						<div>
 							<h2 class="text-xl font-semibold tracking-tight text-stone-900">Render list</h2>
-							<p class="mt-1.5 leading-6 text-stone-500">Tải ảnh theo thứ tự: request sau chỉ bắt đầu khi request trước đã xong và preview đã decode được. Các card có tham số số học cho phép sửa trực tiếp rồi render lại từng card.</p>
+							<p class="mt-1.5 leading-6 text-stone-500">Danh sách được chia theo nhóm để bạn chỉ chạy phần cần test. Mỗi nhóm có nút chạy riêng, còn từng card vẫn có thể render lại độc lập.</p>
 						</div>
 					</div>
 
@@ -157,11 +165,25 @@
 					</div>
 
 					<div v-if="!items.length" class="rounded-[20px] border border-dashed border-stone-900/14 bg-white/55 px-5 py-10 text-center leading-7 text-stone-500">
-						Đăng nhập, nhập remote image URL, sau đó bấm <strong>Tạo danh sách render</strong> để bắt đầu test.
+						Đăng nhập, nhập remote image URL, sau đó bấm <strong>Tạo danh sách test theo nhóm</strong> để hiện các group scenario.
 					</div>
 
-					<div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-						<article v-for="item in items" :key="item.id" class="grid gap-3.5 rounded-[22px] border border-stone-900/12 bg-white/78 p-4 shadow-sm">
+					<div v-else class="grid gap-5">
+						<section v-for="group in scenarioGroups" :key="group.key" class="grid gap-4 rounded-[24px] border border-stone-900/10 bg-white/45 p-4 shadow-[0_12px_30px_rgba(75,52,31,0.06)] sm:p-5">
+							<div class="flex flex-wrap items-start justify-between gap-4 rounded-[20px] border border-[#b45f35]/10 bg-gradient-to-r from-amber-50/80 via-white/80 to-stone-50/80 px-4 py-4">
+								<div class="max-w-3xl">
+									<p class="text-[0.78rem] font-extrabold uppercase tracking-[0.08em] text-[#8d4420]">{{ group.label }}</p>
+									<p class="mt-2 leading-6 text-stone-600">{{ group.description }}</p>
+									<p class="mt-2 text-sm text-stone-500">{{ group.completedCount }} / {{ group.items.length }} case trong nhóm đã hoàn tất</p>
+								</div>
+
+								<button :class="ui.primaryButton" type="button" @click="runGroup(group.key)" :disabled="isRendering || !group.items.length">
+									{{ groupActionLabel(group) }}
+								</button>
+							</div>
+
+							<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+								<article v-for="item in group.items" :key="item.id" class="grid gap-3.5 rounded-[22px] border border-stone-900/12 bg-white/78 p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<h3 class="text-base font-semibold text-stone-900">{{ item.label }}</h3>
@@ -202,6 +224,23 @@
 							<div class="relative aspect-[4/3] overflow-hidden rounded-[18px] border border-stone-900/8 bg-gradient-to-br from-stone-50 via-amber-50/70 to-white flex items-center justify-center">
 								<img v-if="item.status === 'done' && item.previewUrl" class="max-h-full max-w-full object-contain" :src="item.previewUrl" :alt="item.label" />
 
+								<div v-else-if="item.status === 'done' && item.previewWarning" class="absolute inset-0 grid place-items-center bg-amber-500/10 px-4 text-center text-amber-900">
+									<div class="grid justify-items-center gap-3">
+										<span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-700">
+											<svg viewBox="0 0 24 24" aria-hidden="true" class="h-6 w-6 fill-none stroke-current" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+												<path d="M12 3 2.5 20h19L12 3Z" />
+												<path d="M12 9v4.5" />
+												<path d="M12 17.25h.01" />
+											</svg>
+										</span>
+
+										<div>
+											<strong>{{ i18n.render.previewUnavailableTitle }}</strong>
+											<p class="mt-2 leading-6">{{ item.warningMessage }}</p>
+										</div>
+									</div>
+								</div>
+
 								<div v-else-if="item.status === 'error'" class="absolute inset-0 grid place-items-center bg-rose-500/8 px-4 text-center text-rose-900">
 									<div>
 										<strong>Render lỗi</strong>
@@ -215,7 +254,7 @@
 								</div>
 							</div>
 
-							<dl v-if="item.status === 'done'" class="grid gap-2 sm:grid-cols-3">
+							<dl v-if="item.status === 'done'" class="grid gap-2 sm:grid-cols-2">
 								<div class="rounded-2xl bg-stone-100/70 px-3 py-2.5">
 									<dt class="mb-1 text-[0.75rem] font-bold uppercase tracking-[0.05em] text-stone-500">Time</dt>
 									<dd class="font-semibold text-stone-900">{{ item.durationMs }} ms</dd>
@@ -228,7 +267,13 @@
 									<dt class="mb-1 text-[0.75rem] font-bold uppercase tracking-[0.05em] text-stone-500">Type</dt>
 									<dd class="font-semibold text-stone-900">{{ item.contentType }}</dd>
 								</div>
+								<div class="rounded-2xl bg-stone-100/70 px-3 py-2.5">
+									<dt class="mb-1 text-[0.75rem] font-bold uppercase tracking-[0.05em] text-stone-500">Dimensions</dt>
+									<dd class="font-semibold text-stone-900">{{ formatDimensions(item) }}</dd>
+								</div>
 							</dl>
+
+							<div v-if="item.warningMessage" class="rounded-2xl border border-amber-700/15 bg-amber-500/10 px-3 py-2.5 leading-6 text-amber-900">{{ item.warningMessage }}</div>
 
 							<div v-if="item.status !== 'error' && item.message" class="rounded-2xl bg-stone-900/6 px-3 py-2.5 leading-6 text-stone-600">{{ item.message }}</div>
 
@@ -236,7 +281,9 @@
 								<span class="text-[0.8rem] font-extrabold uppercase tracking-[0.04em] text-stone-500">Render URL</span>
 								<textarea readonly :class="ui.codeTextarea" :value="item.requestUrl"></textarea>
 							</label>
-						</article>
+								</article>
+							</div>
+						</section>
 					</div>
 				</section>
 			</main>
