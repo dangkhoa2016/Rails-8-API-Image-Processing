@@ -15,6 +15,8 @@ class ImageController < ApplicationController
   REMOTE_IMAGE_CACHE_TTL = 5.minutes
   REMOTE_IMAGE_CACHE_MAX_ENTRIES = 64
 
+  class RemoteImageTooLargeError < StandardError; end
+
   BLOCKED_IP_RANGES = [
     IPAddr.new("127.0.0.0/8"),   # loopback
     IPAddr.new("10.0.0.0/8"),    # private class A
@@ -22,6 +24,7 @@ class ImageController < ApplicationController
     IPAddr.new("192.168.0.0/16"), # private class C
     IPAddr.new("169.254.0.0/16"), # link-local / AWS metadata
     IPAddr.new("::1"),           # IPv6 loopback
+    IPAddr.new("fe80::/10"),     # IPv6 link-local
     IPAddr.new("fc00::/7")       # IPv6 unique local
   ].freeze
 
@@ -120,11 +123,9 @@ class ImageController < ApplicationController
       end
 
       response_body = response.fetch(:body)
-
-      if response_body.bytesize > MAX_RESPONSE_SIZE
-        render json: { error: I18n.translate("errors.image_too_large") }, status: :unprocessable_entity
-        return
-      end
+    rescue RemoteImageTooLargeError
+      render json: { error: I18n.translate("errors.image_too_large") }, status: :unprocessable_entity
+      return
     rescue => e
       render json: { error: I18n.translate("errors.failed_to_download_image", message: e.message) }, status: :unprocessable_entity
       return
@@ -139,6 +140,11 @@ class ImageController < ApplicationController
 
       quality = transform_methods.delete(:quality) || transform_methods.delete(:q)
       quality = quality.to_i if quality.present?
+
+      if quality.present? && !(1..100).cover?(quality)
+        render json: { error: I18n.translate("errors.invalid_image_quality") }, status: :unprocessable_entity
+        return
+      end
 
       image_format = transform_methods.delete(:image_format)
       result_format = image_format.present? ? image_format[:format] : original_format
@@ -163,6 +169,8 @@ class ImageController < ApplicationController
       # Return the image as binary data (image/jpeg)
       send_data image_buffer, type: "image/#{result_format}", disposition: "inline; filename=\"#{get_file_name_without_extension(url)}.#{result_format}\""
 
+    rescue ImageTransformHelper::InvalidResizeLimitsError => e
+      render json: { error: e.message }, status: :unprocessable_entity
     rescue => e
       Rails.logger.error "Failed to process image: #{e.message}"
       render json: { error: I18n.translate("errors.failed_to_process_image", message: e.message) }, status: :unprocessable_entity
@@ -198,11 +206,24 @@ class ImageController < ApplicationController
     cached_response = self.class.fetch_remote_image_cache(url)
     return cached_response if cached_response.present?
 
-    response = Faraday.get(url)
+    response_body = String.new(encoding: Encoding::BINARY)
+    response = Faraday.get(url) do |request|
+      next unless request&.respond_to?(:options)
+
+      request.options.on_data = proc do |chunk, bytes_received, _env|
+        raise RemoteImageTooLargeError if bytes_received > MAX_RESPONSE_SIZE
+
+        response_body << chunk
+      end
+    end
+
+    response_body = response.body if response_body.empty? && response.body.present?
+    raise RemoteImageTooLargeError if response_body.bytesize > MAX_RESPONSE_SIZE
+
     normalized_response = {
       status: response.respond_to?(:status) ? response.status.to_i : 200,
       headers: response.headers.to_h,
-      body: response.body
+      body: response_body
     }
 
     if cacheable_remote_image?(normalized_response)
