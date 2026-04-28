@@ -26,8 +26,9 @@ Rate limiting is handled by the **rack-attack 6.8** gem — a Rack middleware th
 
 Important behavior:
 - Rack::Attack runs before controller logic, so requests that later return `401` or `422` still increment counters.
-- In this repo only the auth endpoints above are throttled.
+- In this repo the auth endpoints above and `GET /image` are throttled.
 - Localhost (`127.0.0.1`, `::1`) and `/up` are safelisted and will never trigger these limits.
+- Only `GET /image` is throttled. `POST /image` is currently protected by JWT auth but is not rate limited by `rack_attack.rb`.
 
 ### Safelist (never throttled)
 
@@ -130,12 +131,12 @@ Expected output: `401 401 401 401 401 429`
 # Trigger image/ip (31 attempts, the 31st should return 429)
 for i in $(seq 1 31); do
   echo "--- Request $i ---"
-  curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/image?url=https://example.com/image.png"
+  curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/image?url=https://example.com/image.png"
   echo
 done
 ```
 
-Expected output: first 30 requests are non-429, request 31 returns `429`
+Expected output: the first 30 requests are non-429 (often `401` if you omit JWT auth), and request 31 returns `429`.
 
 ---
 
