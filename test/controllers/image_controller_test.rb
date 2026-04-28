@@ -5,6 +5,7 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   Minitest.after_run { puts "ImageControllerTest completed" }
 
   setup do
+    ImageController.clear_remote_image_cache!
     @user = users(:admin)
 
     @token, @payload = Warden::JWTAuth::UserEncoder.new.call(@user, :user, nil)
@@ -20,8 +21,8 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     http_response(content_type: "image/#{image_format}", body: body)
   end
 
-  def http_response(content_type:, body:)
-    Struct.new(:headers, :body).new({ "content-type" => content_type }, body)
+  def http_response(content_type:, body:, status: 200)
+    Struct.new(:status, :headers, :body).new(status, { "content-type" => content_type }, body)
   end
 
   def stub_download(result)
@@ -117,6 +118,54 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_equal "inline; filename=\"sample.jpeg\"", file_name
   end
 
+  test "get index reuses cached remote image for repeated transforms on the same url" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+    calls = 0
+
+    stub_download(->(_request_url) {
+      calls += 1
+      faraday_response
+    }) do
+      get image_index_url, params: { url: url }, headers: @headers
+      assert_response :success
+
+      get image_index_url, params: { url: url, resize: "0.5" }, headers: @headers
+      assert_response :success
+
+      get image_index_url, params: { url: url, toFormat: "webp" }, headers: @headers
+      assert_response :success
+    end
+
+    assert_equal 1, calls
+  end
+
+  test "remote image cache evicts the oldest entry when max entries is exceeded" do
+    oldest_url = "https://test.local/images/cache-0.jpeg"
+    newest_url = "https://test.local/images/cache-#{ImageController::REMOTE_IMAGE_CACHE_MAX_ENTRIES}.jpeg"
+    base_time = Time.current
+
+    (ImageController::REMOTE_IMAGE_CACHE_MAX_ENTRIES + 1).times do |index|
+      url = "https://test.local/images/cache-#{index}.jpeg"
+      timestamp = base_time + index.seconds
+
+      Time.stub(:current, timestamp) do
+        ImageController.write_remote_image_cache(
+          url,
+          status: 200,
+          headers: { "content-type" => "image/jpeg" },
+          body: "body-#{index}".b
+        )
+      end
+    end
+
+    assert_nil ImageController.fetch_remote_image_cache(oldest_url)
+
+    newest_entry = ImageController.fetch_remote_image_cache(newest_url)
+    assert_equal 200, newest_entry.fetch(:status)
+    assert_equal "body-#{ImageController::REMOTE_IMAGE_CACHE_MAX_ENTRIES}".b, newest_entry.fetch(:body)
+  end
+
   test "get index with valid 'token' and with valid 'url' parameter and with 'rotate' and 'format' parameter" do
     url = "https://test.local/images/sample.png"
     faraday_response = fixture_response("sample.png", "png", expect_width: 500, expect_height: 714)
@@ -146,6 +195,49 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_equal(
       I18n.translate("errors.failed_to_download_image", message: "download failed"),
+      json_response.fetch("error")
+    )
+  end
+
+  test "get index with valid token returns unprocessable entity when remote response status is not successful" do
+    url = "https://test.local/images/rate-limited.jpeg"
+    faraday_response = http_response(
+      status: 429,
+      content_type: "text/html; charset=utf-8",
+      body: "<!DOCTYPE html><html><body>rate limited</body></html>"
+    )
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url }, headers: @headers
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal(
+      I18n.translate(
+        "errors.failed_to_download_image",
+        message: "unexpected response status 429 (text/html; charset=utf-8)"
+      ),
+      json_response.fetch("error")
+    )
+  end
+
+  test "get index with valid token returns unprocessable entity when remote content type is not an image" do
+    url = "https://test.local/images/not-image"
+    faraday_response = http_response(
+      content_type: "text/html; charset=utf-8",
+      body: "<!DOCTYPE html><html><body>not an image</body></html>"
+    )
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url }, headers: @headers
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal(
+      I18n.translate(
+        "errors.failed_to_download_image",
+        message: "unexpected response content type text/html; charset=utf-8"
+      ),
       json_response.fetch("error")
     )
   end
