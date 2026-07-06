@@ -46,26 +46,71 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
 
 ## Bắt đầu nhanh
 
-1. Cài đặt dependencies và chuẩn bị database.
+1. Clone kho lưu trữ:
+    ```bash
+    git clone <repository-url>
+    cd Rails-8-API-Image-Processing
+    ```
+
+2. Cài đặt các gói hệ thống.
+
+   Ubuntu 24.04 / Debian phát triển cục bộ:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install --no-install-recommends -y \
+     build-essential \
+     pkg-config \
+     libvips \
+     libheif-examples \
+     libheif-plugin-aomenc \
+     libheif-plugin-x265 \
+     sqlite3
+   ```
+
+   Ghi chú:
+   - `libvips` bắt buộc cho mọi xử lý ảnh.
+   - `libheif-plugin-aomenc` kích hoạt mã hóa AVIF.
+   - `libheif-plugin-x265` kích hoạt mã hóa HEIF/HEIC.
+   - Nếu bạn build với Dockerfile đi kèm, ảnh runtime đã cài gói `x265` của Debian nên chỉ cần rebuild image.
+
+3. Cài đặt phụ thuộc Ruby:
+   ```bash
+   bundle install
+   ```
+
+4. Sao chép file env mẫu và chỉnh sửa nếu cần:
+    ```bash
+    cp .env.sample .env
+    ```
+
+
+
+5. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
+    ```bash
+    bin/rails db:create db:migrate db:seed
+    ```
+
+6. Khởi động máy chủ:
+    ```bash
+    bin/rails server -p 4000
+    ```
+
+Máy chủ lắng nghe tại `http://localhost:4000`.
+
+### Kiểm tra hỗ trợ bộ mã hóa gốc
+
+Trước khi kiểm tra `avif` hoặc `heif`, hãy xác minh bộ mã hóa gốc có sẵn:
 
 ```bash
-bin/setup
+vips -l foreign | grep -i heif
+heif-enc --list-encoders
 ```
 
-2. Khởi động ứng dụng.
+Kết quả mong đợi:
+- AVIF sẽ hiển thị bộ mã hóa như `aom`.
+- HEIF/HEIC sẽ hiển thị bộ mã hóa như `x265`.
 
-```bash
-bin/dev
-```
-
-3. Gọi API tại `http://localhost:3000` theo mặc định. Nếu bạn thiết lập `PORT` trong shell hoặc `.env`, hãy sử dụng giá trị đó.
-
-4. Sử dụng các snippet trong thư mục `manual/` như tài liệu tham khảo copy/paste cho các request xác thực và quản lý người dùng:
-
-* `manual/registration.sh`
-* `manual/session.sh`
-* `manual/password.sh`
-* `manual/user.sh`
+Nếu `heif-enc --list-encoders` chỉ hiển thị AVIF và không có bộ mã hóa HEIC/HEIF, `toFormat=heif` sẽ thất bại với lỗi tương tự `heifsave: Unsupported compression`.
 
 ## Quick Start xác thực local
 
