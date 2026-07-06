@@ -81,6 +81,11 @@ class ImageController < ApplicationController
   private
 
   def get_transform_methods
+    # params.permit! is intentional here: image transform parameters are dynamic Vips method
+    # names supplied by the caller (e.g. sharpen[x1]=1, resize[width]=300). There is no fixed
+    # set of keys to enumerate, so an allowlist is not practical. The hash is processed further
+    # by ImageTransformHelper before being passed to Vips, limiting the actual attack surface.
+    # The Brakeman mass-assignment warning for this line is suppressed in config/brakeman.ignore.
     params.permit!.to_h.except(:controller, :action, :url, :u, :image, :flatten)
   end
 
@@ -118,8 +123,6 @@ class ImageController < ApplicationController
   # {"sharpen"=>{"x1"=>"1"}, "shrink"=>["1", "2", {"xshrink"=>"1"}]}
   # refer: https://libvips.github.io/ruby-vips/Vips/Image.html
   def apply_image_transformations(image, transform_methods = {})
-    puts "apply_image_transformations: #{transform_methods}"
-
     # Loop through query string parameters and apply corresponding operations
     transform_methods.each do |method, params|
       next if params.blank?

@@ -1,213 +1,204 @@
-# Xác thực API Rails 8 với JWT
+# API Xử lý Ảnh Rails 8 với Xác thực JWT
 
 [![Ruby 3.4.7](https://img.shields.io/badge/Ruby-3.4.7-red?style=flat&logo=ruby&logoColor=white)](https://www.ruby-lang.org/)
 [![Rails 8.1.3](https://img.shields.io/badge/Rails-8.1.3-CC0000?logo=rubyonrails&logoColor=white)](https://rubyonrails.org/)
-[![CI](https://github.com/dangkhoa2016/Rails-8-API-Authentication/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa2016/Rails-8-API-Authentication/actions/workflows/ci.yml)
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/dangkhoa2016/Rails-8-API-Authentication/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/dangkhoa2016/Rails-8-API-Authentication/tree/main)
+[![GitHub Actions](https://github.com/dangkhoa2016/Rails-8-API-Image-Processing/actions/workflows/ci.yml/badge.svg)](https://github.com/dangkhoa2016/Rails-8-API-Image-Processing/actions/workflows/ci.yml)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/dangkhoa2016/Rails-8-API-Image-Processing/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/dangkhoa2016/Rails-8-API-Image-Processing/tree/main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > 🌐 Language / Ngôn ngữ: [English](README.md) | **Tiếng Việt**
 
-Dự án này là một dịch vụ xác thực API Rails 8 được xây dựng với Devise và JWT. Nó hỗ trợ đăng ký, xác nhận email, đăng nhập, đăng xuất, truy vấn hồ sơ, và các thao tác quản lý người dùng với kiểm soát truy cập chỉ dành cho admin.
+Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](https://www.libvips.org/) với xác thực dựa trên JWT.
+
+Được xây dựng trên nền tảng [Rails 8 API Authentication](https://github.com/dangkhoa2016/Rails-8-API-Authentication), dự án cung cấp lớp xác thực cốt lõi mà dự án này mở rộng thêm khả năng xử lý ảnh.
 
 ## Tính năng
 
-- Đăng ký người dùng với `username` bắt buộc và xác nhận email.
-- Đăng nhập và đăng xuất dựa trên JWT với cơ chế thu hồi token thông qua denylist.
-- Truy vấn hồ sơ kèm metadata của token qua `/user/profile` và các alias tương thích `/user/me`, `/user/whoami`.
-- Cập nhật tài khoản và xóa tài khoản theo cơ chế self-service.
-- Trạng thái hoạt động/không hoạt động của người dùng — tài khoản bị vô hiệu hóa sẽ tự động bị chặn đăng nhập.
-- Các chức năng chỉ dành cho admin: danh sách người dùng, tạo người dùng, quản lý vai trò, xóa người dùng, bật/tắt trạng thái tài khoản (khóa/mở khóa), và xác nhận email từ admin.
-- Giới hạn tần suất truy cập (rate limiting) cho các endpoint đăng nhập, đăng ký, và reset mật khẩu (rack-attack).
-- Dọn dẹp denylist JWT bằng Active Job và Rake task.
-- Triển khai với Docker + Kamal, có health check cho container.
-- CI với Brakeman, RuboCop, toàn bộ test suite của Rails, và một job riêng cho regression test của auth.
+- Tải ảnh từ xa và áp dụng bất kỳ phép biến đổi libvips nào trong một yêu cầu duy nhất.
+- Đăng nhập/đăng xuất dựa trên JWT với thu hồi token qua danh sách chặn.
+- Tra cứu hồ sơ kèm thông tin token qua `/user/profile` và các bí danh tương thích.
+- Cập nhật và xóa tài khoản tự phục vụ.
+- Danh sách người dùng, tạo người dùng, cập nhật vai trò và xóa người dùng chỉ dành cho quản trị viên.
+- Bảo vệ SSRF: chặn địa chỉ loopback, private và link-local, bao gồm IPv6 `fe80::/10`.
+- Giới hạn kích thước phản hồi (10 MB) để ngăn cạn kiệt bộ nhớ.
+- Giới hạn tốc độ trên các điểm cuối đăng nhập, đăng ký và đặt lại mật khẩu.
+- Dọn dẹp danh sách chặn JWT qua Active Job và Rake task.
+- Docker + Kamal deployment scaffolding với điểm cuối kiểm tra sức khỏe.
 
-## Công nghệ sử dụng
+## Công nghệ
 
-- **Rails 8** — Framework MVC đầy đủ tính năng
-- **Devise** — Giải pháp xác thực linh hoạt
-- **devise-jwt** — Xác thực JWT token cho Devise
-- **Puma** — Web server
-- **SQLite** — Cơ sở dữ liệu
-- **Solid Cache**, **Solid Queue**, **Solid Cable** — Adapters mặc định của Rails 8
-- **Rack::CORS** — Chia sẻ tài nguyên giữa các origin
-- **Rack::Attack** — Giới hạn tốc độ truy cập
-- **Docker + Kamal** — Triển khai containerized
-- **Thruster** — Cache tài sản tĩnh và tăng tốc X-Sendfile
-- **dotenv** — Quản lý biến môi trường
-- **Brakeman** — Phân tích bảo mật tĩnh
-- **RuboCop** — Kiểm tra coding convention
-- **SimpleCov** — Đo lường code coverage
+| Gem | Mục đích |
+|-----|---------|
+| [ruby-vips](https://github.com/libvips/ruby-vips) | Xử lý ảnh libvips |
+| [Faraday](https://github.com/lostisland/faraday) | HTTP client để tải ảnh |
+| [devise](https://github.com/heartcombo/devise) + [devise-jwt](https://github.com/waiting-for-dev/devise-jwt) | Xác thực |
+| [rack-cors](https://github.com/cyu/rack-cors) | Header CORS |
+| [rack-attack](https://github.com/rack/rack-attack) | Giới hạn tốc độ |
+| Rails 8 + SQLite | Framework và cơ sở dữ liệu |
 
 ## Bắt đầu nhanh
 
-1. Cài đặt dependencies và chuẩn bị database.
+1. Clone kho lưu trữ và cài đặt dependencies:
+    ```bash
+    git clone <repository-url>
+    cd Rails-8-API-Image-Processing
+    bundle install
+    ```
 
-```bash
-bin/setup
+2. Sao chép file env mẫu và chỉnh sửa nếu cần:
+    ```bash
+    cp .env.sample .env
+    ```
+
+3. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
+    ```bash
+    bin/rails db:create db:migrate db:seed
+    ```
+
+4. Khởi động máy chủ:
+    ```bash
+    bin/rails server -p 4000
+    ```
+
+Máy chủ lắng nghe tại `http://localhost:4000`.
+
+## Xác thực
+
+Tất cả các điểm cuối (trừ route Devise) yêu cầu một JWT hợp lệ trong header `Authorization`:
+
+```
+Authorization: Bearer <token>
 ```
 
-2. Khởi động ứng dụng.
+### Đăng ký
 
 ```bash
-bin/dev
-```
-
-3. Gọi API tại `http://localhost:4000` theo mặc định. Nếu bạn thiết lập `PORT` trong shell hoặc `.env`, hãy sử dụng giá trị đó.
-
-4. Sử dụng các snippet trong thư mục `manual/` như tài liệu tham khảo copy/paste cho các request xác thực và quản lý người dùng:
-
-- `manual/registration.sh`
-- `manual/session.sh`
-- `manual/password.sh`
-- `manual/user.sh`
-
-## Quick Start xác thực local
-
-Luồng này dành cho môi trường local sạch và tương ứng với các route được cover bởi auth integration tests.
-
-1. Chạy ứng dụng bằng `bin/dev` và giữ nó hoạt động tại `http://localhost:4000` (trừ khi bạn đã override `PORT`).
-
-2. Đăng ký người dùng mới trong terminal khác.
-
-```bash
-curl -sS -X POST http://localhost:4000/users \
+curl -X POST http://localhost:4000/users \
   -H "Content-Type: application/json" \
-  -d '{
-    "user": {
-      "email": "user@example.com",
-      "username": "user1",
-      "password": "password",
-      "password_confirmation": "password"
-    }
-  }' | jq .
+  -d '{"user": {"email": "user@example.com", "password": "password", "password_confirmation": "password"}}'
 ```
 
-3. Lấy confirmation token từ database local.
+Xác nhận email của bạn bằng liên kết được gửi đến hộp thư, sau đó đăng nhập.
+
+### Đăng nhập
 
 ```bash
-bin/rails runner 'puts User.find_by!(email: "user@example.com").confirmation_token'
-```
-
-4. Xác nhận tài khoản.
-
-```bash
-curl -sS "http://localhost:4000/users/confirmation?confirmation_token=<token>" | jq .
-```
-
-5. Đăng nhập và lấy JWT từ header `Authorization` trong response.
-
-```bash
-TOKEN=$(curl -is -X POST http://localhost:4000/users/sign_in \
+curl -X POST http://localhost:4000/users/sign_in \
   -H "Content-Type: application/json" \
+  -d '{"user": {"email": "user@example.com", "password": "password"}}' -i
+```
+
+JWT được trả về trong header phản hồi `Authorization`.
+
+### Đăng xuất
+
+```bash
+curl -X DELETE http://localhost:4000/users/sign_out \
+  -H "Authorization: Bearer <token>"
+```
+
+### Hồ sơ
+
+```bash
+curl http://localhost:4000/user/profile \
+  -H "Authorization: Bearer <token>"
+```
+
+## API Ảnh
+
+### GET /image
+
+Truyền URL ảnh và các tham số biến đổi dưới dạng query string:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=300&resize[height]=300&toFormat=webp" \
+  -H "Authorization: Bearer <token>" \
+  --output result.webp
+```
+
+### POST /image
+
+Truyền tham số dưới dạng JSON body:
+
+```bash
+curl -X POST http://localhost:4000/image \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
-    "user": {
-      "email": "user@example.com",
-      "password": "password"
-    }
-  }' | sed -n 's/^authorization: Bearer //p' | tr -d '\r')
+    "url": "https://example.com/photo.jpg",
+    "toFormat": "webp",
+    "resize": {"width": 300, "height": 300}
+  }' --output result.webp
 ```
 
-6. Gọi endpoint profile với JWT.
+Tên tham số biến đổi khớp với tên phương thức libvips (ví dụ: `sharpen`, `resize`, `rotate`, `toFormat`). Xem thư mục `manual/` để biết thêm ví dụ.
+
+## Chạy kiểm thử
 
 ```bash
-curl -sS http://localhost:4000/user/profile \
-  -H "Authorization: Bearer ${TOKEN}" | jq .
+bin/rails test
 ```
 
-7. Đăng xuất và thu hồi token.
-
-```bash
-curl -sS -X DELETE http://localhost:4000/users/sign_out \
-  -H "Authorization: Bearer ${TOKEN}" | jq .
-```
-
-8. (Tùy chọn) Tham khảo thêm các request trong `manual/session.sh`, `manual/registration.sh`, `manual/password.sh`, và `manual/user.sh` cho các trường hợp token không hợp lệ, token hết hạn, reset mật khẩu, và ví dụ quản lý user/admin.
-
-## Môi trường
-
-Sao chép `.env.sample` thành `.env` cho môi trường local:
-
-```bash
-cp .env.sample .env
-```
-
-Các cấu hình đề xuất cho môi trường local:
-
-```env
-RAILS_ENV=development
-RAILS_LOG_TO_STDOUT=true
-PORT=4000
-RAILS_MAX_THREADS=3
-```
-
-Nếu không thiết lập `PORT`, `bin/dev` sẽ chạy mặc định trên `4000`. File `.env.sample` hiện đặt sẵn `PORT=4000`, nên nếu bạn copy nguyên file này thì local sẽ chạy tại `http://localhost:4000`. Toàn bộ danh sách biến môi trường — bao gồm secret cho production, cấu hình Puma, mailer, admin seed, CORS, và JWT token cho manual scripts — được mô tả trong `.env.sample`.
-
-Với browser client chạy khác origin, cấu hình CORS mặc định cho phép request từ `CORS_ALLOWED_ORIGINS` nhưng **không** expose response header `Authorization`. Nếu frontend cần đọc JWT từ response đăng nhập, hãy cập nhật `config/initializers/cors.rb` để expose header này một cách rõ ràng.
-
-## Code Coverage
-
-Bạn có thể tạo báo cáo coverage local với SimpleCov bằng cách chạy test kèm biến `COVERAGE=1`:
+Với báo cáo độ phủ:
 
 ```bash
 COVERAGE=1 bin/rails test
 ```
 
-Khi bật `COVERAGE=1`, test suite sẽ chạy không dùng Rails parallel workers để báo cáo SimpleCov không bị sai lệch.
+Khi `COVERAGE=1` được thiết lập, test suite chạy không dùng Rails parallel workers để báo cáo SimpleCov chính xác.
 
-Báo cáo sẽ được ghi vào `public/coverage`. Khi Rails server đang chạy trong môi trường development, bạn có thể mở `http://localhost:4000/coverage` để xem report mới nhất. Endpoint này chỉ bật ở development và chỉ redirect tới báo cáo HTML tĩnh.
+Báo cáo được ghi vào `public/coverage`. Trong khi Rails server đang chạy trong môi trường development, mở `http://localhost:3000/coverage` để xem báo cáo mới nhất được tạo. Điểm cuối chỉ dành cho development này redirect đến báo cáo HTML tĩnh.
 
-Về bên trong, ứng dụng redirect `/coverage` sang `/coverage/` trước khi static file server xử lý request. Dấu `/` ở cuối là cần thiết vì HTML do SimpleCov sinh ra tham chiếu asset theo dạng đường dẫn tương đối như `./assets/...`.
+Bên trong, ứng dụng redirect `/coverage` sang `/coverage/` trước khi static file server xử lý request. Dấu `/` ở cuối rất quan trọng vì HTML do SimpleCov sinh ra tham chiếu asset qua đường dẫn tương đối như `./assets/...`.
 
-## Contract Route hiện tại
+## Hợp đồng tuyến đường hiện tại
 
-Các route dưới đây phản ánh `config/routes.rb` và implementation hiện tại của controller.
+Hợp đồng tuyến đường bên dưới phản ánh `config/routes.rb` và implementation hiện tại của controller.
 
-### Route xác thực
+### Tuyến đường xác thực
 
-| Method    | Path                  | Mục đích                                           |
-| --------- | --------------------- | -------------------------------------------------- |
-| POST      | `/users`              | Đăng ký tài khoản mới                              |
-| POST      | `/users/sign_in`      | Đăng nhập và nhận JWT trong header `Authorization` |
-| DELETE    | `/users/sign_out`     | Đăng xuất và thu hồi token hiện tại                |
-| GET       | `/users/confirmation` | Xác nhận email qua flow confirmable của Devise     |
-| POST      | `/users/password`     | Gửi email đặt lại mật khẩu                         |
-| PUT/PATCH | `/users/password`     | Đặt lại mật khẩu với token                         |
-| PUT/PATCH | `/users`              | Cập nhật tài khoản đang đăng nhập                  |
-| DELETE    | `/users`              | Xóa tài khoản đang đăng nhập                       |
+| Method | Path | Mục đích |
+| --- | --- | --- |
+| POST | `/users` | Đăng ký tài khoản mới |
+| POST | `/users/sign_in` | Đăng nhập và nhận JWT trong header phản hồi `Authorization` |
+| DELETE | `/users/sign_out` | Đăng xuất và thu hồi token hiện tại |
+| GET | `/users/confirmation` | Xác nhận email qua flow confirmable của Devise |
+| POST | `/users/password` | Gửi hướng dẫn đặt lại mật khẩu |
+| PUT/PATCH | `/users/password` | Đặt lại mật khẩu với token |
+| PUT/PATCH | `/users` | Cập nhật tài khoản đang đăng nhập |
+| DELETE | `/users` | Xóa tài khoản đang đăng nhập |
 
-### Route hồ sơ
+### Tuyến đường hồ sơ
 
-| Method | Path            | Mục đích             |
-| ------ | --------------- | -------------------- |
-| GET    | `/user/profile` | Endpoint hồ sơ chính |
-| GET    | `/user/me`      | Alias tương thích    |
-| GET    | `/user/whoami`  | Alias tương thích    |
+| Method | Path | Mục đích |
+| --- | --- | --- |
+| GET | `/user/profile` | Điểm cuối hồ sơ chính |
+| GET | `/user/me` | Bí danh tương thích |
+| GET | `/user/whoami` | Bí danh tương thích |
 
-Cả ba route hồ sơ này cùng trỏ vào một action controller và trả về cùng một cấu trúc response.
+Cả ba tuyến đường hồ sơ đều trỏ vào cùng một controller action và trả về cùng một cấu trúc payload.
 
-### Route quản lý người dùng & admin
+### Tuyến đường quản trị và quản lý người dùng
 
-| Method | Path            | Mục đích                                    |
-| ------ | --------------- | ------------------------------------------- |
-| GET    | `/users`        | Lấy danh sách người dùng (chỉ admin)        |
-| POST   | `/users/create` | Tạo người dùng (admin)                      |
-| GET    | `/users/:id`    | Xem người dùng (admin hoặc chính mình)      |
-| PUT    | `/users/:id`    | Cập nhật người dùng (admin hoặc chính mình) |
-| DELETE | `/users/:id`    | Xóa người dùng (admin hoặc chính mình)      |
+| Method | Path | Mục đích |
+| --- | --- | --- |
+| GET | `/users` | Lấy danh sách người dùng, chỉ admin |
+| POST | `/users/create` | Tạo người dùng với tư cách admin |
+| GET | `/users/:id` | Xem người dùng; admin hoặc chính mình |
+| PUT | `/users/:id` | Cập nhật người dùng; admin hoặc chính mình |
+| DELETE | `/users/:id` | Xóa người dùng; admin hoặc chính mình |
 
-### Route tiện ích
+### Tuyến đường tiện ích
 
-| Method | Path    | Mục đích                                 |
-| ------ | ------- | ---------------------------------------- |
-| GET    | `/`     | Endpoint chào mừng ở root                |
-| GET    | `/home` | Alias của endpoint chào mừng             |
-| GET    | `/up`   | Health check cho uptime monitor/balancer |
+| Method | Path | Mục đích |
+| --- | --- | --- |
+| GET | `/` | Điểm cuối chào mừng root |
+| GET | `/home` | Bí danh điểm cuối chào mừng |
+| GET | `/up` | Kiểm tra sức khỏe cho uptime/load balancers |
 
-## Ghi chú về format request
+## Ghi chú định dạng yêu cầu
 
-Các endpoint của Devise yêu cầu payload được lồng dưới key `user`. Với endpoint đăng ký `POST /users`, trường `username` là bắt buộc.
+Các điểm cuối Devise yêu cầu payload được lồng dưới key `user`. Với đăng ký (`POST /users`), trường `username` là bắt buộc.
 
 Ví dụ request đăng ký:
 
@@ -233,19 +224,19 @@ Ví dụ request đăng nhập:
 }
 ```
 
-Request self-service cập nhật tài khoản trên `PUT /users` hoặc `PATCH /users` bắt buộc phải có `current_password`. Các request admin-managed trên `PUT /users/:id` đi qua `UsersController` nên không yêu cầu `current_password`.
+Các cập nhật tài khoản tự phục vụ trên `PUT /users` hoặc `PATCH /users` phải bao gồm `current_password`. Các cập nhật do admin quản lý trên `PUT /users/:id` đi qua `UsersController` và không yêu cầu `current_password`.
 
-Endpoint profile cũng có 2 kiểu lỗi xác thực khác nhau:
+Tra cứu hồ sơ cũng có hai chế độ lỗi không xác thực khác nhau:
 
-- Token thiếu, hết hạn, hoặc đã bị thu hồi: `422` với `user: null` và `token_info`
-- Token bị lỗi format/malformed: `422` với `{ "error": "Invalid token" }`
+- Token thiếu, hết hạn, hoặc đã bị thu hồi: `422` với `user: null` cộng thêm `token_info`
+- Token định dạng sai (malformed): `422` với `{ "error": "Invalid token" }`
 
 ## Luồng ví dụ
 
 ### 1. Đăng ký
 
 ```bash
-curl -X POST http://localhost:4000/users \
+curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
   -d '{
     "user": {
@@ -257,18 +248,18 @@ curl -X POST http://localhost:4000/users \
   }'
 ```
 
-### 2. Xác nhận email
+### 2. Xác nhận Email
 
-Sử dụng đường dẫn xác nhận do Devise tạo ra, ví dụ:
+Sử dụng liên kết xác nhận do Devise sinh ra, ví dụ:
 
 ```bash
-curl "http://localhost:4000/users/confirmation?confirmation_token=<token>"
+curl "http://localhost:3000/users/confirmation?confirmation_token=<token>"
 ```
 
 ### 3. Đăng nhập
 
 ```bash
-curl -i -X POST http://localhost:4000/users/sign_in \
+curl -i -X POST http://localhost:3000/users/sign_in \
   -H "Content-Type: application/json" \
   -d '{
     "user": {
@@ -278,54 +269,54 @@ curl -i -X POST http://localhost:4000/users/sign_in \
   }'
 ```
 
-JWT được trả về trong header `Authorization`.
+JWT được trả về trong header phản hồi `Authorization`.
 
-### 4. Xem hồ sơ
+### 4. Đọc Hồ sơ
 
 ```bash
-curl http://localhost:4000/user/profile \
+curl http://localhost:3000/user/profile \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
-`/user/me` và `/user/whoami` là các alias tương thích cho cùng một response.
+`/user/me` và `/user/whoami` là các bí danh tương thích cho cùng một phản hồi.
 
 ### 5. Đăng xuất
 
 ```bash
-curl -X DELETE http://localhost:4000/users/sign_out \
+curl -X DELETE http://localhost:3000/users/sign_out \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
 ## Tài liệu tham khảo thủ công
 
-Các file dưới đây phản ánh chính xác hơn việc triển khai thực tế so với các ví dụ trong README gốc, nhưng chúng có kèm các khối output mẫu và nên được xem như ghi chú tham khảo thay vì script shell để chạy nguyên văn:
+Các file dưới đây hiện phản ánh implementation chính xác hơn các ví dụ README gốc, nhưng chúng bao gồm các khối output mẫu và nên được xem như ghi chú tham khảo thay vì script shell bạn thực thi nguyên văn:
 
 - [manual/registration.sh](./manual/registration.sh)
 - [manual/session.sh](./manual/session.sh)
 - [manual/password.sh](./manual/password.sh)
 - [manual/user.sh](./manual/user.sh)
 
-## Tài liệu chuyên sâu
+## Tài liệu bổ sung
 
-Thư mục `docs/` chứa các ghi chú chi tiết hơn về implementation và vận hành của hệ thống xác thực hiện tại:
+Thư mục `docs/` chứa các ghi chú implementation và vận hành sâu hơn cho stack xác thực hiện tại:
 
-- [docs/ACCESS_CONTROL.vi.md](./docs/ACCESS_CONTROL.vi.md) - Quy tắc phân quyền cho guest, self-service, và admin
-- [docs/JWT_LIFECYCLE.vi.md](./docs/JWT_LIFECYCLE.vi.md) - Vòng đời JWT, metadata ở endpoint profile, thu hồi, và dọn dẹp denylist
-- [docs/RATE_LIMITING.vi.md](./docs/RATE_LIMITING.vi.md) - Các ngưỡng Rack::Attack hiện tại, response khi throttle, và lưu ý sau reverse proxy
-- [docs/DEPLOYMENT.vi.md](./docs/DEPLOYMENT.vi.md) - Triển khai với Kamal, Docker, biến môi trường, health check, và persistence của SQLite
+- [docs/ACCESS_CONTROL.md](./docs/ACCESS_CONTROL.md) - Quy tắc phân quyền cho guest, self-service và admin flows
+- [docs/JWT_LIFECYCLE.md](./docs/JWT_LIFECYCLE.md) - Cấp phát JWT, profile-token metadata, thu hồi và dọn dẹp
+- [docs/RATE_LIMITING.md](./docs/RATE_LIMITING.md) - Các ngưỡng Rack::Attack hiện tại, phản hồi lỗi và lưu ý proxy
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Kamal, Docker, biến môi trường, health check và SQLite persistence
 
 ## Kế hoạch cải tiến
 
-Các file theo dõi cải tiến của dự án được liệt kê dưới đây:
+Các tài liệu cải tiến dự án được theo dõi trong:
 
 - [manual/PROJECT_IMPROVEMENT_REPORT.md](./manual/PROJECT_IMPROVEMENT_REPORT.md)
 - [manual/IMPLEMENTATION_TRACKER.md](./manual/IMPLEMENTATION_TRACKER.md)
 
 ## Dự án liên quan
 
-Dự án này có một phiên bản Node.js triển khai các khái niệm xác thực tương tự (JWT, kiểm soát truy cập theo vai trò, thu hồi token) trên một stack khác:
+Dự án này có một bản triển khai Node.js anh em bao phủ các khái niệm xác thực tương tự (JWT, kiểm soát truy cập theo vai trò, thu hồi token) trên một stack khác:
 
-- **[dangkhoa2016/Nodejs-API-Authentication](https://github.com/dangkhoa2016/Nodejs-API-Authentication)** — Một REST API sẵn sàng cho production dành cho xác thực và quản lý người dùng, được xây dựng bằng **Hono**, **Sequelize**, **bcryptjs**, **JWT**, và **SQLite** (dev) / **Postgres** (prod).
+- **[dangkhoa2016/Nodejs-API-Authentication](https://github.com/dangkhoa2016/Nodejs-API-Authentication)** — Một REST API sẵn sàng cho production dành cho xác thực và quản lý người dùng, được xây dựng bằng **Hono**, **Sequelize**, **bcryptjs**, **JWT**, **SQLite** (dev) và **Postgres** (prod).
 
 ## License
 
