@@ -11,7 +11,7 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   end
 
   def stub_request(url, file, image_format, expect_width, expect_height)
-    body = File.open("test/fixtures/files/#{file}", "rb").read
+    body = File.binread("test/fixtures/files/#{file}")
     original_image = Vips::Image.new_from_buffer(body, "")
     assert_equal expect_width, original_image.get("width")
     assert_equal expect_height, original_image.get("height")
@@ -92,5 +92,53 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     image = Vips::Image.new_from_buffer(response.body, "")
     assert_equal 714, image.get("width")
     assert_equal 500, image.get("height")
+  end
+
+  test "get index with valid token returns unprocessable entity when download fails" do
+    url = "https://test.local/images/missing.jpeg"
+    WebMock.stub_request(:get, url).to_raise(StandardError.new("download failed"))
+
+    get image_index_url, params: { url: url }, headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_equal(
+      I18n.translate("errors.failed_to_download_image", message: "download failed"),
+      json_response.fetch("error")
+    )
+  end
+
+  test "get index with valid token applies quality when q parameter is present" do
+    url = "https://test.local/images/sample.jpeg"
+    stub_request(url, "sample.jpeg", "jpeg", 400, 713)
+
+    get image_index_url, params: { url: url, q: "80" }, headers: @headers
+
+    assert_response :success
+  end
+
+  test "get index with valid token returns unprocessable entity when image processing fails" do
+    url = "https://test.local/images/broken.jpeg"
+    WebMock.stub_request(:get, url).to_return(
+      status: 200,
+      headers: { "Content-Type" => "image/jpeg" },
+      body: "raw-image"
+    )
+
+    get image_index_url, params: { url: url }, headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_includes json_response.fetch("error"), "Failed to process image"
+  end
+
+  test "apply_image_transformations ignores individual transform errors" do
+    image = Class.new do
+      def explode(_value)
+        raise StandardError, "boom"
+      end
+    end.new
+
+    result = ImageController.new.send(:apply_image_transformations, image, { "explode" => "1" })
+
+    assert_same image, result
   end
 end
