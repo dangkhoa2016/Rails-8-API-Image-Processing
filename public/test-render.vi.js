@@ -1,38 +1,42 @@
 const { createApp } = Vue;
 
+// ==========================================
+// TỪ ĐIỂN NGÔN NGỮ (LANGUAGE DICTIONARY)
+// Dịch các giá trị (values) bên dưới để đổi ngôn ngữ
+// ==========================================
 const I18N = {
   auth: {
-    missingFields: "Please enter API Base URL, email, and password.",
-    loginSuccess: "Sign-in succeeded:",
-    loginFailed: "Sign-in failed",
+    missingFields: "Hãy nhập đầy đủ API Base URL, email và password.",
+    loginSuccess: "Đăng nhập thành công:",
+    loginFailed: "Đăng nhập thất bại",
     missingAuthHeader:
-      "Could not read the Authorization header. If the page is cross-origin, verify CORS exposed headers.",
-    defaultError: "Sign-in failed.",
+      "Không đọc được Authorization header. Nếu trang khác origin, hãy kiểm tra CORS expose headers.",
+    defaultError: "Đăng nhập thất bại.",
   },
   render: {
     missingPrerequisites:
-      "You must sign in and provide a valid remote image URL before rendering.",
-    sendingRequest: "Sending request...",
-    renderFailed: "Render failed",
-    loadedIn: "Loaded in",
-    loadErrorDefault: "Could not load image.",
+      "Cần đăng nhập và nhập remote image URL hợp lệ trước khi render.",
+    sendingRequest: "Đang gửi request...",
+    renderFailed: "Render thất bại",
+    loadedIn: "Tải xong trong", // Sẽ tự động nối thêm số mili-giây (VD: Tải xong trong 150 ms.)
+    loadErrorDefault: "Không tải được ảnh.",
     decodeError:
-      "The response decoded as binary, but the browser could not render the image.",
+      "Response decode được thành binary, nhưng browser không render được ảnh.",
     previewUnavailable:
-      "Render succeeded, but the current browser cannot preview this format.",
-    previewUnavailableTitle: "Preview unavailable",
-    parametersUpdated: "Configuration updated. Run the card again to use the new URL.",
+      "Render thành công nhưng trình duyệt hiện tại không preview được định dạng này.",
+    previewUnavailableTitle: "Preview không khả dụng",
+    parametersUpdated: "Đã cập nhật cấu hình. Bấm render lại để chạy URL mới.",
   },
   status: {
-    queued: "Queued",
-    loading: "Loading",
-    done: "Done",
-    error: "Error",
+    queued: "Đang xếp hàng",
+    loading: "Đang tải",
+    done: "Hoàn thành",
+    error: "Lỗi",
   },
   scenarios: {
     original: {
-      label: "Original image",
-      note: "No transform, only the download + auth pipeline.",
+      label: "Ảnh gốc",
+      note: "Không transform, chỉ đi qua pipeline download + auth.",
     },
     "resize-half": { label: "Resize 50%", note: "resize=0.5" },
     "resize-box": {
@@ -49,6 +53,9 @@ const I18N = {
   },
 };
 
+// ==========================================
+// CẤU HÌNH GIAO DIỆN & STYLE
+// ==========================================
 const UI = {
   panel:
     "rounded-[24px] border border-stone-900/12 bg-white/80 p-5 shadow-[0_24px_64px_rgba(75,52,31,0.12)] backdrop-blur-sm sm:p-[22px]",
@@ -73,47 +80,50 @@ const UI = {
 const SCENARIO_GROUPS = [
   {
     key: "custom-base",
-    label: "Group 1: Freeform",
-    description: "Build a baseline request or try a custom query before moving to specific transforms.",
+    label: "Nhóm 1: Tùy chỉnh tự do",
+    description: "Tạo request nền hoặc thử query tùy biến trước khi đi vào các transform cụ thể.",
   },
   {
     key: "resize-fit",
-    label: "Group 2: Resize & Fit",
-    description: "Check common resize variants and fit modes.",
+    label: "Nhóm 2: Resize & Fit",
+    description: "Kiểm tra các biến thể đổi kích thước và chế độ fit thường gặp.",
   },
   {
     key: "crop-trim",
-    label: "Group 3: Crop & Trim",
-    description: "Use this group for crop regions, smart crop, and border trimming.",
+    label: "Nhóm 3: Crop & Trim",
+    description: "Dùng khi cần test vùng cắt, crop thông minh và trim viền.",
   },
   {
     key: "orientation",
-    label: "Group 4: Orientation",
-    description: "Covers autorotate, rotate, and flip in several directions.",
+    label: "Nhóm 4: Orientation",
+    description: "Bao phủ autorotate, rotate và flip theo nhiều hướng khác nhau.",
   },
   {
     key: "format-background",
-    label: "Group 5: Format, Quality & Background",
-    description: "Checks output format, quality, flatten, and output background color.",
+    label: "Nhóm 5: Format, Quality & Background",
+    description: "Kiểm tra output format, quality, flatten và màu nền đầu ra.",
   },
   {
     key: "filters",
-    label: "Group 6: Filters",
-    description: "Runs color, blur, sharpen, and other image-processing filters.",
+    label: "Nhóm 6: Filters",
+    description: "Chạy các bộ lọc màu sắc, làm mờ, sharpen và hiệu ứng xử lý ảnh.",
   },
   {
     key: "combos-overlays",
-    label: "Group 7: Combo & Overlay",
-    description: "Multi-transform pipelines and cases such as watermark or metadata.",
+    label: "Nhóm 7: Combo & Overlay",
+    description: "Các pipeline kết hợp nhiều transform hoặc trường hợp watermark/metadata.",
   },
   {
     key: "negative-boundaries",
-    label: "Group 8: Negative & Boundaries",
-    description: "Reserved for error cases, boundary inputs, and intentionally invalid requests.",
+    label: "Nhóm 8: Negative & Boundaries",
+    description: "Dành cho test lỗi, boundary input và các case cố tình không hợp lệ.",
   },
 ];
 
 const scenarioConfigs = [
+  // ==========================================
+  // NHÓM 1: TÙY CHỈNH TỰ DO (CUSTOM & BASE)
+  // ==========================================
   {
     groupKey: "custom-base",
     key: "original",
@@ -128,6 +138,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 2: THAY ĐỔI KÍCH THƯỚC (RESIZE & FIT)
+  // ==========================================
   {
     groupKey: "resize-fit",
     key: "resize-half",
@@ -282,6 +296,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 3: CẮT GỌT VÀ TỌA ĐỘ (CROP & TRIM)
+  // ==========================================
   {
     groupKey: "crop-trim",
     key: "crop-top-left",
@@ -378,6 +396,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 4: HƯỚNG VÀ GÓC XOAY (ORIENTATION)
+  // ==========================================
   {
     groupKey: "orientation",
     key: "autorot-exif",
@@ -442,6 +464,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 5: ĐỊNH DẠNG, CHẤT LƯỢNG & NỀN (FORMAT & BACKGROUND)
+  // ==========================================
   {
     groupKey: "format-background",
     key: "webp",
@@ -586,6 +612,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 6: BỘ LỌC MÀU SẮC & NGHỆ THUẬT (FILTERS)
+  // ==========================================
   {
     groupKey: "filters",
     key: "gaussblur",
@@ -692,6 +722,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 7: COMBO PHỐI HỢP & WATERMARK (COMBOS & OVERLAYS)
+  // ==========================================
   {
     groupKey: "combos-overlays",
     key: "combo-avatar",
@@ -842,6 +876,10 @@ const scenarioConfigs = [
       },
     ],
   },
+
+  // ==========================================
+  // NHÓM 8: KIỂM THỬ NGOẠI LỆ & LỖI (NEGATIVE & BOUNDARIES)
+  // ==========================================
   {
     groupKey: "negative-boundaries",
     key: "invalid-format",
@@ -908,6 +946,9 @@ const scenarioConfigs = [
   },
 ];
 
+// ==========================================
+// LOGIC VUE APP
+// ==========================================
 createApp({
   data() {
     const defaultBase =
@@ -923,7 +964,7 @@ createApp({
 
     return {
       ui: UI,
-      i18n: I18N,
+      i18n: I18N, // Có thể dùng trong template nếu cần
       apiBase: defaultBase,
       isLocalHost,
       credentials: {
@@ -1120,10 +1161,10 @@ createApp({
 
     groupActionLabel(group) {
       if (this.activeGroupKey === group.key && this.isRendering) {
-        return "Running group...";
+        return "Đang chạy nhóm...";
       }
 
-      return group.completedCount ? "Run group again" : "Run this group";
+      return group.completedCount ? "Chạy lại nhóm" : "Chạy nhóm này";
     },
 
     resetItemState(item, message = "") {
