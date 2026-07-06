@@ -55,6 +55,28 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     yield
   end
 
+  def stub_streamed_download(content_type:, chunks:, status: 200)
+    result = lambda do |_request_url, &request_block|
+      options = Struct.new(:on_data).new(nil)
+      request = Struct.new(:options).new(options)
+      request_block.call(request) if request_block
+
+      response_env = Struct.new(:response_headers).new({ "content-type" => content_type })
+      bytes_received = 0
+
+      chunks.each do |chunk|
+        bytes_received += chunk.bytesize
+        options.on_data.call(chunk, bytes_received, response_env)
+      end
+
+      http_response(content_type: content_type, body: nil, status: status)
+    end
+
+    stub_download(result) do
+      yield
+    end
+  end
+
   def assert_invalid_url_response(url)
     get image_index_url, params: { url: url }, headers: @headers
 
@@ -113,6 +135,13 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     fixture_response(url, "sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
     assert_ssrf_blocked(url, addresses: [ "127.0.0.1" ])
+
+    assert_response :unprocessable_entity
+    assert_includes json_response.fetch("error"), "blocked address"
+  end
+
+  test "get index with valid token blocks urls that resolve to ipv6 link-local addresses" do
+    assert_ssrf_blocked("https://blocked-v6.local/images/sample.jpeg", addresses: [ "fe80::1" ])
 
     assert_response :unprocessable_entity
     assert_includes json_response.fetch("error"), "blocked address"
@@ -279,6 +308,21 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
       status: 200,
       headers: { "Content-Type" => "image/jpeg" },
       body: oversized_body
+    )
+
+    get image_index_url, params: { url: url }, headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_equal I18n.translate("errors.image_too_large"), json_response.fetch("error")
+  end
+
+  test "get index with valid token aborts streamed responses that exceed max size" do
+    url = "https://test.local/images/streamed-large.jpeg"
+
+    stub_request(:get, url).to_return(
+      status: 200,
+      headers: { "Content-Type" => "image/jpeg" },
+      body: "a".b + ("b" * ImageController::MAX_RESPONSE_SIZE).b
     )
 
     get image_index_url, params: { url: url }, headers: @headers
@@ -544,6 +588,50 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_not_equal 500, response.status
   end
 
+  test "resize width and height above configured limit return unprocessable entity" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url,
+        params: { url: url, resize: { width: "99999", height: "99999" } },
+        headers: @headers
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal(
+      I18n.translate(
+        "errors.invalid_resize_limits",
+        max_width: ImageTransformHelper.max_resize_width,
+        max_height: ImageTransformHelper.max_resize_height,
+        max_scale: ImageTransformHelper.max_resize_scale.to_i
+      ),
+      json_response.fetch("error")
+    )
+  end
+
+  test "resize scale above configured limit returns unprocessable entity" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url,
+        params: { url: url, resize: "99999" },
+        headers: @headers
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal(
+      I18n.translate(
+        "errors.invalid_resize_limits",
+        max_width: ImageTransformHelper.max_resize_width,
+        max_height: ImageTransformHelper.max_resize_height,
+        max_scale: ImageTransformHelper.max_resize_scale.to_i
+      ),
+      json_response.fetch("error")
+    )
+  end
+
   test "unsupported output format returns unprocessable entity" do
     url = "https://test.local/images/sample.jpeg"
     faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
@@ -553,6 +641,18 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_entity
+  end
+
+  test "quality above 100 returns unprocessable entity without invoking libvips save" do
+    url = "https://test.local/images/sample.jpeg"
+    faraday_response = fixture_response("sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    stub_download(faraday_response) do
+      get image_index_url, params: { url: url, quality: "150" }, headers: @headers
+    end
+
+    assert_response :unprocessable_entity
+    assert_equal I18n.translate("errors.invalid_image_quality"), json_response.fetch("error")
   end
 
   # ---------------------------------------------------------------------------

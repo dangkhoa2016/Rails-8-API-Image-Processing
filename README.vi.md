@@ -83,6 +83,17 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
     cp .env.sample .env
     ```
 
+  Giới hạn an toàn kích thước có thể cấu hình qua env để bảo vệ máy chủ khỏi các
+  yêu cầu render cực lớn:
+
+  ```bash
+  IMAGE_MAX_RESIZE_WIDTH=4096
+  IMAGE_MAX_RESIZE_HEIGHT=4096
+  IMAGE_MAX_RESIZE_SCALE=8
+  ```
+
+  Các yêu cầu vượt quá bất kỳ giới hạn nào sẽ trả về `422 Unprocessable Content`
+  trước khi libvips bắt đầu resize tốn kém.
 
 
 5. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
