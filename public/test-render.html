@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="vi">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Image Render Smoke Test</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap"
+			rel="stylesheet"
+		/>
+		<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+		<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+	</head>
+	<body class="min-h-screen overflow-x-hidden bg-gradient-to-b from-[#fbf7ef] to-[#efe6d8] text-stone-900 antialiased [font-family:IBM_Plex_Sans,_Segoe_UI,_sans-serif]">
+		<div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+			<div class="absolute -left-12 top-0 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl"></div>
+			<div class="absolute right-0 top-8 h-60 w-60 rounded-full bg-sky-200/30 blur-3xl"></div>
+			<div class="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-orange-200/20 blur-3xl"></div>
+		</div>
+
+		<div id="app" class="hidden mx-auto px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+			<header class="mb-6 rounded-[28px] border border-stone-900/10 bg-gradient-to-br from-amber-50/95 via-orange-50/90 to-stone-50/90 p-7 shadow-[0_24px_64px_rgba(75,52,31,0.12)] sm:p-8">
+				<p class="mb-3 text-[0.78rem] font-bold uppercase tracking-[0.12em] text-[#b45f35]">Rails 8 API Image Processing</p>
+				<h1 class="max-w-[12ch] text-[clamp(2rem,4vw,3.6rem)] font-semibold leading-[0.95] tracking-[-0.04em]">Image Render Smoke Test</h1>
+				<p class="mt-4 max-w-4xl text-[1.02rem] leading-7 text-stone-500">
+					Trang này dùng Vue 3 CDN, không cần build tool. Luồng test: đăng nhập lấy JWT,
+					nhập image URL, sau đó tải từng biến thể render ảnh theo thứ tự để xem tốc độ,
+					lỗi xử lý và kết quả preview từ API.
+				</p>
+			</header>
+
+			<main class="grid gap-4 xl:grid-cols-12">
+				<section :class="[ui.panel, 'xl:col-span-6']">
+					<div class="mb-5 flex items-start gap-3.5">
+						<span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#b45f35]/14 font-extrabold text-[#8d4420]">1</span>
+						<div>
+							<h2 class="text-xl font-semibold tracking-tight text-stone-900">Đăng nhập</h2>
+							<p class="mt-1.5 leading-6 text-stone-500">JWT được đọc từ header <strong class="font-semibold text-stone-900">Authorization</strong> của <strong class="font-semibold text-stone-900">/users/sign_in</strong>.</p>
+						</div>
+					</div>
+
+					<form class="grid gap-3.5" @submit.prevent="signIn">
+						<label class="grid gap-2 text-[0.94rem] font-semibold text-stone-800">
+							API Base URL
+							<input v-model.trim="apiBase" type="url" placeholder="http://localhost:4000" :class="ui.field" :disabled="isLoggingIn || isRendering" />
+						</label>
+
+						<div class="grid gap-3 sm:grid-cols-2">
+							<label class="grid gap-2 text-[0.94rem] font-semibold text-stone-800">
+								Email
+								<input v-model.trim="credentials.email" type="email" placeholder="admin@example.com" :class="ui.field" :disabled="isLoggingIn || isRendering" />
+							</label>
+
+							<label class="grid gap-2 text-[0.94rem] font-semibold text-stone-800">
+								Password
+								<input v-model="credentials.password" type="password" placeholder="password" :class="ui.field" :disabled="isLoggingIn || isRendering" />
+							</label>
+						</div>
+
+						<div class="flex flex-wrap gap-2.5">
+							<button :class="ui.primaryButton" type="submit" :disabled="isLoggingIn || isRendering">
+								{{ isLoggingIn ? 'Đang đăng nhập...' : 'Đăng nhập' }}
+							</button>
+
+							<button :class="ui.secondaryButton" type="button" @click="signOut" :disabled="!isAuthenticated || isLoggingIn || isRendering">
+								Đăng xuất
+							</button>
+						</div>
+
+						<p class="leading-6 text-stone-500">
+							Nên mở trang từ <strong class="font-semibold text-stone-900">./test-render.html</strong> để dùng cùng origin với API.
+							Nếu mở từ nơi khác, header <strong class="font-semibold text-stone-900">Authorization</strong> cần được expose qua CORS.
+						</p>
+
+						<div v-if="authMessage" :class="ui.noticeSuccess">{{ authMessage }}</div>
+						<div v-if="authError" :class="ui.noticeError">{{ authError }}</div>
+					</form>
+
+					<div v-if="isAuthenticated" class="mt-4 flex flex-wrap items-center justify-between gap-3.5 rounded-[18px] border border-[#b45f35]/14 bg-amber-50/80 px-4 py-3.5">
+						<div>
+							<div class="[font-family:IBM_Plex_Mono,_SFMono-Regular,_monospace] text-[0.82rem] text-stone-500">Đang đăng nhập bằng tài khoản</div>
+							<strong class="mt-1 block text-base font-semibold text-stone-900">{{ userEmail }}</strong>
+						</div>
+
+						<div class="max-w-full break-all [font-family:IBM_Plex_Mono,_SFMono-Regular,_monospace] text-[0.82rem] text-stone-500">{{ tokenPreview }}</div>
+					</div>
+				</section>
+
+				<section :class="[ui.panel, 'xl:col-span-6', !isAuthenticated ? 'opacity-60' : '']">
+					<div class="mb-5 flex items-start gap-3.5">
+						<span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#b45f35]/14 font-extrabold text-[#8d4420]">2</span>
+						<div>
+							<h2 class="text-xl font-semibold tracking-tight text-stone-900">Nhập image URL</h2>
+							<p class="mt-1.5 leading-6 text-stone-500">Sau khi đăng nhập thành công mới cho tạo danh sách render.</p>
+						</div>
+					</div>
+
+					<form class="grid gap-3.5" @submit.prevent="startRender">
+						<label class="grid gap-2 text-[0.94rem] font-semibold text-stone-800">
+							Remote image URL
+							<input
+								v-model.trim="sourceUrl"
+								type="url"
+								placeholder="https://example.com/image.jpg"
+								:class="ui.field"
+								:disabled="!isAuthenticated || isRendering"
+							/>
+						</label>
+
+						<div class="flex flex-wrap gap-2.5">
+							<button :class="ui.primaryButton" type="submit" :disabled="!canRender || isRendering">
+								{{ isRendering ? 'Đang render...' : (items.length ? 'Render lại toàn bộ danh sách' : 'Tạo danh sách render') }}
+							</button>
+
+							<button :class="ui.secondaryButton" type="button" @click="clearRenderResults" :disabled="!items.length || isRendering">
+								Xóa kết quả
+							</button>
+						</div>
+
+						<p class="leading-6 text-stone-500">
+							Mỗi card bên dưới hiển thị đầy đủ GET URL của API. Ảnh được tải bằng <strong class="font-semibold text-stone-900">fetch</strong> kèm Bearer token,
+							vì <strong class="font-semibold text-stone-900">&lt;img src&gt;</strong> không tự gắn header Authorization.
+						</p>
+
+						<p class="leading-6 text-stone-500">
+							Mặc định trên domain public sẽ dùng <strong class="font-semibold text-stone-900">same-origin static image</strong> để tránh hotlink rate-limit.
+							Nếu bạn nhập URL từ các host như Wikimedia, một số host có thể trả về <strong class="font-semibold text-stone-900">429</strong> sau vài request liên tiếp.
+							Trên <strong class="font-semibold text-stone-900">localhost</strong>, không dùng được ảnh cùng origin vì SSRF guard chặn loopback.
+						</p>
+
+						<div v-if="renderError" :class="ui.noticeError">{{ renderError }}</div>
+					</form>
+				</section>
+
+				<section v-if="isAuthenticated" :class="[ui.panel, 'xl:col-span-12']">
+					<div class="mb-5 flex items-start gap-3.5">
+						<span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#b45f35]/14 font-extrabold text-[#8d4420]">3</span>
+						<div>
+							<h2 class="text-xl font-semibold tracking-tight text-stone-900">Render list</h2>
+							<p class="mt-1.5 leading-6 text-stone-500">Tải ảnh theo thứ tự: request sau chỉ bắt đầu khi request trước đã xong và preview đã decode được. Các card có tham số số học cho phép sửa trực tiếp rồi render lại từng card.</p>
+						</div>
+					</div>
+
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+						<div class="min-w-full flex-1 sm:min-w-[360px]">
+							<div class="mb-2 flex justify-between gap-3 text-sm text-stone-500">
+								<span>{{ completedCount }} / {{ items.length || plannedCount }} hoàn tất</span>
+								<span v-if="isRendering">Đang render...</span>
+								<span v-else>{{ items.length ? 'Đã dừng hàng đợi' : 'Chưa có hàng đợi' }}</span>
+							</div>
+							<div class="h-2.5 overflow-hidden rounded-full bg-stone-900/8">
+								<div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-lime-400 transition-[width] duration-200" :style="{ width: progressPercent + '%' }"></div>
+							</div>
+						</div>
+					</div>
+
+					<div v-if="!items.length" class="rounded-[20px] border border-dashed border-stone-900/14 bg-white/55 px-5 py-10 text-center leading-7 text-stone-500">
+						Đăng nhập, nhập remote image URL, sau đó bấm <strong>Tạo danh sách render</strong> để bắt đầu test.
+					</div>
+
+					<div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+						<article v-for="item in items" :key="item.id" class="grid gap-3.5 rounded-[22px] border border-stone-900/12 bg-white/78 p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<h3 class="text-base font-semibold text-stone-900">{{ item.label }}</h3>
+									<p class="mt-1.5 leading-6 text-stone-500">{{ item.note }}</p>
+								</div>
+
+								<span :class="statusBadgeClass(item.status)">{{ statusLabel(item.status) }}</span>
+							</div>
+
+							<div class="grid gap-3 rounded-[18px] border border-[#b45f35]/12 bg-amber-50/55 px-3.5 py-3">
+								<div class="flex items-center justify-between gap-3">
+									<strong class="text-[0.78rem] font-extrabold uppercase tracking-[0.05em] text-[#8d4420]">Case config</strong>
+									<span class="text-[0.78rem] text-stone-500">Có thể nhập số hoặc chuỗi. URL đổi ngay khi sửa</span>
+								</div>
+
+								<div class="grid gap-3 sm:grid-cols-2">
+									<label v-for="control in item.controls" :key="`${item.id}-${control.key}`" class="grid gap-1.5 text-[0.82rem] font-semibold text-stone-700">
+										<span>{{ control.label }}</span>
+										<input
+											v-model.trim="control.value"
+											type="text"
+											:inputmode="control.inputMode || 'text'"
+											:placeholder="control.placeholder"
+											:class="ui.compactField"
+											:disabled="isRendering"
+											@input="handleControlInput(item)"
+										/>
+									</label>
+								</div>
+							</div>
+
+							<div class="flex justify-end">
+								<button :class="ui.cardButton" type="button" @click="renderItem(item)" :disabled="isRendering">
+									{{ item.status === 'done' || item.status === 'error' ? 'Render lại card' : 'Render card này' }}
+								</button>
+							</div>
+
+							<div class="relative aspect-[4/3] overflow-hidden rounded-[18px] border border-stone-900/8 bg-gradient-to-br from-stone-50 via-amber-50/70 to-white flex items-center justify-center">
+								<img v-if="item.status === 'done' && item.previewUrl" class="max-h-full max-w-full object-contain" :src="item.previewUrl" :alt="item.label" />
+
+								<div v-else-if="item.status === 'error'" class="absolute inset-0 grid place-items-center bg-rose-500/8 px-4 text-center text-rose-900">
+									<div>
+										<strong>Render lỗi</strong>
+										<p class="mt-2 leading-6">{{ item.message }}</p>
+									</div>
+								</div>
+
+								<div v-else class="absolute inset-0 grid place-items-center gap-3 bg-white/45 px-4 text-center text-stone-500 backdrop-blur-[1px]">
+									<div class="h-9 w-9 animate-spin rounded-full border-4 border-[#b45f35]/18 border-t-[#b45f35]"></div>
+									<div>{{ item.status === 'queued' ? 'Chờ tới lượt...' : 'Đang tải và decode ảnh...' }}</div>
+								</div>
+							</div>
+
+							<dl v-if="item.status === 'done'" class="grid gap-2 sm:grid-cols-3">
+								<div class="rounded-2xl bg-stone-100/70 px-3 py-2.5">
+									<dt class="mb-1 text-[0.75rem] font-bold uppercase tracking-[0.05em] text-stone-500">Time</dt>
+									<dd class="font-semibold text-stone-900">{{ item.durationMs }} ms</dd>
+								</div>
+								<div class="rounded-2xl bg-stone-100/70 px-3 py-2.5">
+									<dt class="mb-1 text-[0.75rem] font-bold uppercase tracking-[0.05em] text-stone-500">Bytes</dt>
+									<dd class="font-semibold text-stone-900">{{ humanBytes(item.bytes) }}</dd>
+								</div>
+								<div class="rounded-2xl bg-stone-100/70 px-3 py-2.5">
+									<dt class="mb-1 text-[0.75rem] font-bold uppercase tracking-[0.05em] text-stone-500">Type</dt>
+									<dd class="font-semibold text-stone-900">{{ item.contentType }}</dd>
+								</div>
+							</dl>
+
+							<div v-if="item.status !== 'error' && item.message" class="rounded-2xl bg-stone-900/6 px-3 py-2.5 leading-6 text-stone-600">{{ item.message }}</div>
+
+							<label class="grid gap-2">
+								<span class="text-[0.8rem] font-extrabold uppercase tracking-[0.04em] text-stone-500">Render URL</span>
+								<textarea readonly :class="ui.codeTextarea" :value="item.requestUrl"></textarea>
+							</label>
+						</article>
+					</div>
+				</section>
+			</main>
+		</div>
+
+		<script src="test-render.js"></script>
+	</body>
+</html>
