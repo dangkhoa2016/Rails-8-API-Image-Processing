@@ -1,0 +1,9 @@
+
+rails generate devise User
+rails generate controller User index
+
+rails generate controller Home index
+
+rails generate controller Image index
+
+sudo apt-get install libvips -y
