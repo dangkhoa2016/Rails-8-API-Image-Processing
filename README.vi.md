@@ -24,6 +24,8 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
 - Giới hạn tốc độ trên các điểm cuối đăng nhập, đăng ký và đặt lại mật khẩu.
 - Dọn dẹp danh sách chặn JWT qua Active Job và Rake task.
 - Docker + Kamal deployment scaffolding với điểm cuối kiểm tra sức khỏe.
+- Xuất ảnh đã biến đổi sang các định dạng phổ biến gồm `jpg`, `png`, `webp`, `avif` và `heif`.
+- Xác thực JWT qua [devise-jwt](https://github.com/waiting-for-dev/devise-jwt).
 
 ## Công nghệ
 
@@ -38,29 +40,69 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
 
 ## Bắt đầu nhanh
 
-1. Clone kho lưu trữ và cài đặt dependencies:
+1. Clone kho lưu trữ:
     ```bash
     git clone <repository-url>
     cd Rails-8-API-Image-Processing
+    ```
+
+2. Cài đặt gói hệ thống native.
+
+   Ubuntu 24.04 / Debian phát triển cục bộ:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install --no-install-recommends -y \
+    build-essential \
+    pkg-config \
+    libvips \
+    libheif-examples \
+    libheif-plugin-aomenc \
+    libheif-plugin-x265 \
+    sqlite3
+  ```
+
+   Ghi chú:
+   - `libvips` bắt buộc cho mọi xử lý ảnh.
+   - `libheif-plugin-aomenc` kích hoạt mã hóa AVIF.
+   - `libheif-plugin-x265` kích hoạt mã hóa HEIF/HEIC.
+   - Nếu bạn build với Dockerfile đi kèm, ảnh runtime đã cài gói `x265` của Debian nên chỉ cần rebuild image.
+
+3. Cài đặt phụ thuộc Ruby:
+  ```bash
     bundle install
     ```
 
-2. Sao chép file env mẫu và chỉnh sửa nếu cần:
+4. Sao chép file env mẫu và chỉnh sửa nếu cần:
     ```bash
     cp .env.sample .env
     ```
 
-3. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
+5. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
     ```bash
     bin/rails db:create db:migrate db:seed
     ```
 
-4. Khởi động máy chủ:
+6. Khởi động máy chủ:
     ```bash
     bin/rails server -p 4000
     ```
 
 Máy chủ lắng nghe tại `http://localhost:4000`.
+
+### Kiểm tra hỗ trợ bộ mã hóa gốc
+
+Trước khi kiểm tra `avif` hoặc `heif`, hãy xác minh bộ mã hóa gốc có sẵn:
+
+```bash
+vips -l foreign | grep -i heif
+heif-enc --list-encoders
+```
+
+Kết quả mong đợi:
+- AVIF nên hiển thị bộ mã hóa như `aom`.
+- HEIF/HEIC nên hiển thị bộ mã hóa như `x265`.
+
+Nếu `heif-enc --list-encoders` chỉ hiển thị AVIF mà không có bộ mã hóa HEIC/HEIF, `toFormat=heif` sẽ thất bại với lỗi tương tự `heifsave: Unsupported compression`.
 
 ## Xác thực
 
@@ -132,6 +174,29 @@ curl -X POST http://localhost:4000/image \
 ```
 
 Tên tham số biến đổi khớp với tên phương thức libvips (ví dụ: `sharpen`, `resize`, `rotate`, `toFormat`). Xem thư mục `manual/` để biết thêm ví dụ.
+
+### Ví dụ AVIF / HEIF
+
+AVIF:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&toFormat=avif" \
+  -H "Authorization: Bearer <token>" \
+  --output result.avif
+```
+
+HEIF:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&toFormat=heif" \
+  -H "Authorization: Bearer <token>" \
+  --output result.heif
+```
+
+Ghi chú:
+- `avif` thường có thể xem trước trực tiếp trong các trình duyệt hiện đại.
+- `heif` có thể được API sinh thành công nhưng vẫn thất bại khi xem trước trong trình duyệt dùng bởi trang smoke-test. Trong trường hợp đó, tải file xuống và kiểm tra bằng trình xem hỗ trợ HEIF/HEIC.
+- `GET /image` bị giới hạn tốc độ. Nếu bạn kiểm tra nhiều biến thể nhanh, hãy xem [docs/RATE_LIMITING.md](docs/RATE_LIMITING.md).
 
 ## Chạy kiểm thử
 
