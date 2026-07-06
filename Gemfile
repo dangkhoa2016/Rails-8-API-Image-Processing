@@ -60,3 +60,9 @@ gem "devise-jwt", "~> 0.13.0"
 
 # Rate limiting for auth endpoints
 gem "rack-attack"
+
+gem "ruby-vips", "~> 2.2"
+
+gem "faraday", "~> 2.12"
+
+gem "color_conversion", "~> 0.1.2"
