@@ -10,6 +10,76 @@ class ImageController < ApplicationController
   MAX_RESPONSE_SIZE = 10_485_760 # 10MB
   before_action :authorize_request
 
+  REMOTE_IMAGE_CACHE_TTL = 5.minutes
+  REMOTE_IMAGE_CACHE_MAX_ENTRIES = 64
+
+  BLOCKED_IP_RANGES = [
+    IPAddr.new("127.0.0.0/8"),   # loopback
+    IPAddr.new("10.0.0.0/8"),    # private class A
+    IPAddr.new("172.16.0.0/12"), # private class B
+    IPAddr.new("192.168.0.0/16"), # private class C
+    IPAddr.new("169.254.0.0/16"), # link-local / AWS metadata
+    IPAddr.new("::1"),           # IPv6 loopback
+    IPAddr.new("fc00::/7")       # IPv6 unique local
+  ].freeze
+
+  class << self
+    def clear_remote_image_cache!
+      remote_image_cache_mutex.synchronize do
+        remote_image_cache.clear
+      end
+    end
+
+    def fetch_remote_image_cache(url)
+      remote_image_cache_mutex.synchronize do
+        prune_remote_image_cache!
+        entry = remote_image_cache[url]
+        return if entry.blank?
+
+        {
+          status: entry[:status],
+          headers: entry[:headers].dup,
+          body: entry[:body]
+        }
+      end
+    end
+
+    def write_remote_image_cache(url, status:, headers:, body:)
+      remote_image_cache_mutex.synchronize do
+        prune_remote_image_cache!
+        remote_image_cache[url] = {
+          status: status,
+          headers: headers.dup,
+          body: body,
+          cached_at: Time.current
+        }
+
+        trim_remote_image_cache!
+      end
+    end
+
+    private
+
+    def remote_image_cache
+      @remote_image_cache ||= {}
+    end
+
+    def remote_image_cache_mutex
+      @remote_image_cache_mutex ||= Mutex.new
+    end
+
+    def prune_remote_image_cache!
+      expires_before = Time.current - REMOTE_IMAGE_CACHE_TTL
+      remote_image_cache.delete_if { |_url, entry| entry[:cached_at] <= expires_before }
+    end
+
+    def trim_remote_image_cache!
+      while remote_image_cache.size > REMOTE_IMAGE_CACHE_MAX_ENTRIES
+        oldest_url, = remote_image_cache.min_by { |_url, entry| entry[:cached_at] }
+        remote_image_cache.delete(oldest_url)
+      end
+    end
+  end
   # GET /index
   def index
     # Get image URL from query string
@@ -34,9 +104,20 @@ class ImageController < ApplicationController
     response_body = nil
     response_headers = nil
     begin
-      response = Faraday.get(url)  # Download the image from the URL
-      response_headers = response.headers
-      response_body = response.body
+      response = fetch_remote_image(url)
+      response_headers = response.fetch(:headers)
+      response_status = response.fetch(:status).to_i
+      response_content_type = response_headers["content-type"].to_s
+
+      unless response_status.between?(200, 299)
+        raise StandardError, "unexpected response status #{response_status} (#{response_content_type.presence || "unknown content type"})"
+      end
+
+      unless response_content_type.start_with?("image/")
+        raise StandardError, "unexpected response content type #{response_content_type.presence || "unknown"}"
+      end
+
+      response_body = response.fetch(:body)
 
       if response_body.bytesize > MAX_RESPONSE_SIZE
         render json: { error: I18n.translate("errors.image_too_large") }, status: :unprocessable_entity
@@ -50,8 +131,9 @@ class ImageController < ApplicationController
     begin
       image = Vips::Image.new_from_buffer(response_body, "")  # Create an image object from the buffer
 
-      original_format = response_headers["content-type"].split("/").last || "jpg"
+      original_format = response_headers["content-type"].to_s.split(";").first.split("/").last || "jpg"
       transform_methods = ImageTransformHelper.get_transform_params(get_transform_methods, original_format, image.size)
+      transform_methods.delete(:flatten) if transform_methods[:flatten].present? && image.bands <= 3
 
       quality = transform_methods.delete(:quality) || transform_methods.delete(:q)
       quality = quality.to_i if quality.present?
@@ -91,6 +173,46 @@ class ImageController < ApplicationController
     # by ImageTransformHelper before being passed to Vips, limiting the actual attack surface.
     # The Brakeman mass-assignment warning for this line is suppressed in config/brakeman.ignore.
     params.permit!.to_h.except(:controller, :action, :url, :u, :image, :flatten)
+  end
+
+  def fetch_remote_image(url)
+    cached_response = self.class.fetch_remote_image_cache(url)
+    return cached_response if cached_response.present?
+
+    uri = URI.parse(url)
+    resolved_addresses = Resolv.getaddresses(uri.host)
+
+    blocked = resolved_addresses.any? do |addr|
+      BLOCKED_IP_RANGES.any? { |range| range.include?(addr.strip) rescue false }
+    end
+
+    if blocked
+      raise StandardError, "remote URL resolves to a blocked address"
+    end
+
+    response = Faraday.get(url)
+    normalized_response = {
+      status: response.respond_to?(:status) ? response.status.to_i : 200,
+      headers: response.headers.to_h,
+      body: response.body
+    }
+
+    if cacheable_remote_image?(normalized_response)
+      self.class.write_remote_image_cache(
+        url,
+        status: normalized_response[:status],
+        headers: normalized_response[:headers],
+        body: normalized_response[:body]
+      )
+    end
+
+    normalized_response
+  end
+
+  def cacheable_remote_image?(response)
+    response[:status].between?(200, 299) &&
+      response[:headers]["content-type"].to_s.start_with?("image/") &&
+      response[:body].present?
   end
 
   # def get_hash_from_query_string(query_string)
