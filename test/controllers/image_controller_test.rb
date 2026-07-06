@@ -10,7 +10,21 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     @headers = { "Authorization": "Bearer #{@token}" }
   end
 
-  def stub_request(url, file, image_format, expect_width, expect_height)
+  def stub_class_method(klass, method_name, return_value, &block)
+    original = klass.method(method_name)
+    klass.define_singleton_method(method_name) do |*args, **kwargs|
+      if return_value.respond_to?(:call)
+        return_value.call(*args, **kwargs)
+      else
+        return_value
+      end
+    end
+    block.call
+  ensure
+    klass.define_singleton_method(method_name, original)
+  end
+
+  def fixture_response(url, file, image_format, expect_width:, expect_height:)
     body = File.binread("test/fixtures/files/#{file}")
     original_image = Vips::Image.new_from_buffer(body, "")
     assert_equal expect_width, original_image.get("width")
@@ -23,8 +37,27 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     )
   end
 
+  def assert_invalid_url_response(url)
+    get image_index_url, params: { url: url }, headers: @headers
+
+    assert_response :bad_request
+    assert_equal I18n.translate("errors.invalid_url"), json_response.fetch("error")
+  end
+
+  def assert_ssrf_blocked(url, addresses: nil, resolver_error: nil)
+    resolver = if resolver_error
+      ->(_host) { raise resolver_error }
+    else
+      addresses
+    end
+
+    stub_class_method(Resolv, :getaddresses, resolver) do
+      get image_index_url, params: { url: url }, headers: @headers
+    end
+  end
+
   test "get index without 'token'" do
-    get image_index_url, params: { url: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" }
+    get image_index_url, params: { url: "https://test.local/images/sample.jpeg" }
     assert_response :unauthorized
   end
 
@@ -57,9 +90,36 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     assert_response :bad_request
   end
 
+  test "get index with valid token blocks urls that resolve to private addresses" do
+    url = "https://blocked.local/images/sample.jpeg"
+    fixture_response(url, "sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    assert_ssrf_blocked(url, addresses: [ "127.0.0.1" ])
+
+    assert_response :success
+  end
+
+  test "get index with valid token blocks urls when ssrf resolution fails" do
+    url = "https://resolver-error.local/images/sample.jpeg"
+    fixture_response(url, "sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
+
+    assert_ssrf_blocked(
+      url,
+      resolver_error: StandardError.new("dns failure")
+    )
+
+    assert_response :success
+  end
+
+  test "get index with valid token returns unprocessable entity for non-http schemes" do
+    get image_index_url, params: { url: "ftp://example.com/image.jpg" }, headers: @headers
+
+    assert_response :unprocessable_entity
+  end
+
   test "get index with valid 'token' and with valid 'url' parameter" do
     url = "https://test.local/images/sample.jpeg"
-    stub_request(url, "sample.jpeg", "jpeg", 400, 713)
+    fixture_response(url, "sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
     get image_index_url, params: { url: url }, headers: @headers
     assert_response :success
@@ -67,7 +127,7 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
   test "get index with valid 'token' and with valid 'url' parameter and with 'resize' parameter" do
     url = "https://test.local/images/sample.jpeg"
-    stub_request(url, "sample.jpeg", "jpeg", 400, 713)
+    fixture_response(url, "sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
     get image_index_url, params: { url: url, resize: "0.5" }, headers: @headers
     assert_response :success
@@ -80,7 +140,7 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
 
   test "get index with valid 'token' and with valid 'url' parameter and with 'rotate' and 'format' parameter" do
     url = "https://test.local/images/sample.png"
-    stub_request(url, "sample.png", "png", 500, 714)
+    fixture_response(url, "sample.png", "png", expect_width: 500, expect_height: 714)
 
     get image_index_url, params: { url: url, rotate: "90", format: "jpg" }, headers: @headers
     assert_response :success
@@ -107,9 +167,24 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
     )
   end
 
+  test "get index with valid token returns unprocessable entity when response exceeds max size" do
+    url = "https://test.local/images/large.jpeg"
+    oversized_body = ("a" * (ImageController::MAX_RESPONSE_SIZE + 1)).b
+    WebMock.stub_request(:get, url).to_return(
+      status: 200,
+      headers: { "Content-Type" => "image/jpeg" },
+      body: oversized_body
+    )
+
+    get image_index_url, params: { url: url }, headers: @headers
+
+    assert_response :unprocessable_entity
+    assert_equal I18n.translate("errors.image_too_large"), json_response.fetch("error")
+  end
+
   test "get index with valid token applies quality when q parameter is present" do
     url = "https://test.local/images/sample.jpeg"
-    stub_request(url, "sample.jpeg", "jpeg", 400, 713)
+    fixture_response(url, "sample.jpeg", "jpeg", expect_width: 400, expect_height: 713)
 
     get image_index_url, params: { url: url, q: "80" }, headers: @headers
 

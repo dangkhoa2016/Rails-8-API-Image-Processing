@@ -39,7 +39,7 @@ end
 # Allow Faraday test adapter (in-process stubs) while blocking real network calls
 WebMock.disable_net_connect!(
   allow_localhost: false,
-  allow: [ "127.0.0.1", "::1" ]
+  allow: [ "127.0.0.1", "::1" ]  # allow rack test server itself
 )
 
 class ActionDispatch::IntegrationTest
