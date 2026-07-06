@@ -77,6 +77,19 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
     cp .env.sample .env
     ```
 
+  Giới hạn an toàn kích thước có thể cấu hình qua env để bảo vệ máy chủ khỏi các
+
+  yêu cầu render cực lớn:
+
+  ```bash
+  IMAGE_MAX_RESIZE_WIDTH=4096
+  IMAGE_MAX_RESIZE_HEIGHT=4096
+  IMAGE_MAX_RESIZE_SCALE=8
+  ```
+
+  Các yêu cầu vượt quá bất kỳ giới hạn nào sẽ trả về `422 Unprocessable Content`
+  trước khi libvips bắt đầu resize tốn kém.
+
 5. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
     ```bash
     bin/rails db:create db:migrate db:seed
@@ -174,6 +187,30 @@ curl -X POST http://localhost:4000/image \
 ```
 
 Tên tham số biến đổi khớp với tên phương thức libvips (ví dụ: `sharpen`, `resize`, `rotate`, `toFormat`). Xem thư mục `manual/` để biết thêm ví dụ.
+
+### Giới hạn an toàn Resize
+
+Để tránh các yêu cầu như `resize[width]=99999&resize[height]=99999` hoặc hệ số
+tỷ lệ rất lớn, API xác thực đầu vào resize dựa trên các giới hạn env sau:
+
+| Env | Mặc định | Mục đích |
+|-----|---------|---------|
+| `IMAGE_MAX_RESIZE_WIDTH` | `4096` | Chiều rộng yêu cầu tối đa được chấp nhận |
+| `IMAGE_MAX_RESIZE_HEIGHT` | `4096` | Chiều cao yêu cầu tối đa được chấp nhận |
+| `IMAGE_MAX_RESIZE_SCALE` | `8` | Hệ số tỷ lệ tối đa được chấp nhận |
+
+Ví dụ thất bại:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=99999&resize[height]=99999" \
+  -H "Authorization: Bearer <token>"
+```
+
+Phản hồi:
+
+```json
+{"error":"Resize exceeds allowed limits (max width: 4096, max height: 4096, max scale: 8)"}
+```
 
 ### Ví dụ AVIF / HEIF
 

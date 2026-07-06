@@ -45,6 +45,8 @@ en:
     failed_to_process_image: "Failed to process image: %{message}"
     url_parameter_is_required: "URL parameter is required"
     invalid_url: "Invalid URL"
+    invalid_image_quality: "Image quality must be between 1 and 100"
+    invalid_resize_limits: "Resize exceeds allowed limits (max width: %{max_width}, max height: %{max_height}, max scale: %{max_scale})"
     failed_to_download_image: "Failed to download image: %{message}"
     image_too_large: "Image is too large"
 
