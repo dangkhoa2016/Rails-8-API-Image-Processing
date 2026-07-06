@@ -45,6 +45,7 @@ en:
     failed_to_process_image: "Failed to process image"
     url_parameter_is_required: "URL parameter is required"
     invalid_url: "Invalid URL"
+    image_too_large: "Image too large"
     failed_to_download_image: "Failed to download image"
 
   user:

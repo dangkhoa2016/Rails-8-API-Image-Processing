@@ -7,6 +7,7 @@
 # /image?url=https://.....png&shrink[]=5&shrink[]=5&shrink[][xshrink]=50&sharpen[x1]=0.8&sharpen[sigma]=0.5
 
 class ImageController < ApplicationController
+  MAX_RESPONSE_SIZE = 10_485_760 # 10MB
   before_action :authorize_request
 
   # GET /index
@@ -36,6 +37,11 @@ class ImageController < ApplicationController
       response = Faraday.get(url)  # Download the image from the URL
       response_headers = response.headers
       response_body = response.body
+
+      if response_body.bytesize > MAX_RESPONSE_SIZE
+        render json: { error: I18n.translate("errors.image_too_large") }, status: :unprocessable_entity
+        return
+      end
     rescue => e
       render json: { error: I18n.translate("errors.failed_to_download_image", message: e.message) }, status: :unprocessable_entity
       return
