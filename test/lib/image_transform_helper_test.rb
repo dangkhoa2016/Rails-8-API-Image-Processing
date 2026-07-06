@@ -109,6 +109,33 @@ class ImageTransformHelperTest < ActiveSupport::TestCase
     assert_equal [ 0.5, {} ], result[:resize]
   end
 
+  test "apply_flatten_if_required adds flatten for jpeg when not already set" do
+    transform_methods = {}
+    helper_call(:apply_flatten_if_required, transform_methods, "jpg", [ 255, 255, 255 ])
+    assert_equal({ background: [ 255, 255, 255 ] }, transform_methods[:flatten])
+
+    transform_methods = {}
+    helper_call(:apply_flatten_if_required, transform_methods, "jpeg", [ 0, 0, 0 ])
+    assert_equal({ background: [ 0, 0, 0 ] }, transform_methods[:flatten])
+  end
+
+  test "apply_flatten_if_required skips flatten when already set" do
+    existing = { background: [ 255, 0, 0 ] }
+    transform_methods = { flatten: existing }
+    helper_call(:apply_flatten_if_required, transform_methods, "jpg", [ 255, 255, 255 ])
+    assert_equal existing, transform_methods[:flatten], "should not overwrite existing flatten"
+  end
+
+  test "apply_flatten_if_required does not set flatten for png or webp format" do
+    transform_methods = {}
+    helper_call(:apply_flatten_if_required, transform_methods, "png", [ 255, 255, 255 ])
+    assert_nil transform_methods[:flatten]
+
+    transform_methods = {}
+    helper_call(:apply_flatten_if_required, transform_methods, "webp", [ 255, 255, 255 ])
+    assert_nil transform_methods[:flatten]
+  end
+
   private
 
   def helper_call(method_name, *args)
