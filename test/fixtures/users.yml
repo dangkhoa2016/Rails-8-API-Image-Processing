@@ -8,10 +8,14 @@ one:
   email: 'user1@example.local'
   username: 'user1'
   first_name: 'User'
+  confirmed_at: <%= Time.now %>
+  encrypted_password: <%= Devise::Encryptor.digest(User, 'password') %>
 
 two:
   email: 'user2@example.local'
   username: 'user2'
+  confirmed_at: <%= Time.now %>
+  encrypted_password: <%= Devise::Encryptor.digest(User, 'password') %>
 
 admin:
   email: 'admin@local.test'
