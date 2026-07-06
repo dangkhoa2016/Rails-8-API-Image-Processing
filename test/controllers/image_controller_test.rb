@@ -4,25 +4,64 @@ class ImageControllerTest < ActionDispatch::IntegrationTest
   Minitest.after_run { puts "ImageControllerTest completed" }
 
   setup do
-    @user = confirmed_user("image_test@example.com")
-    @headers = jwt_auth_headers_for(@user)
+    @user = users(:admin)
+
+    @token, @payload = Warden::JWTAuth::UserEncoder.new.call(@user, :user, nil)
+    @headers = { "Authorization": "Bearer #{@token}" }
   end
 
-  test "get index without 'url' parameter" do
-    get image_index_url
+  def stub_request(url, file, image_format, expect_width, expect_height)
+    body = File.open("test/fixtures/files/#{file}", "rb").read
+    original_image = Vips::Image.new_from_buffer(body, "")
+    assert_equal expect_width, original_image.get("width")
+    assert_equal expect_height, original_image.get("height")
+
+    WebMock.stub_request(:get, url).to_return(
+      status: 200,
+      headers: { "Content-Type" => "image/#{image_format}" },
+      body: body
+    )
+  end
+
+  test "get index without 'token'" do
+    get image_index_url, params: { url: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" }
+    assert_response :unauthorized
+  end
+
+  test "get index with invalid 'token'" do
+    get image_index_url,
+      params: { url: "http://example.com/image.jpg" },
+      headers: { "Authorization": "Bearer invalid" }
+    assert_response :unauthorized
+  end
+
+  test "get index with non-admin user returns unauthorized" do
+    non_admin = users(:one)
+    token, _payload = Warden::JWTAuth::UserEncoder.new.call(non_admin, :user, nil)
+
+    get image_index_url,
+      params: { url: "https://test.local/images/sample.jpeg" },
+      headers: { "Authorization": "Bearer #{token}" }
+
+    assert_response :unauthorized
+    assert_equal({ "errors" => I18n.t("errors.must_be_administrator") }, json_response)
+  end
+
+  test "get index with valid 'token' and without 'url' parameter" do
+    get image_index_url, headers: @headers
     assert_response :bad_request
   end
 
-  test "get index with invalid 'url' parameter" do
-    get image_index_url, params: { url: "invalid" }
+  test "get index with valid 'token' and with invalid 'url' parameter" do
+    get image_index_url, params: { url: "invalid" }, headers: @headers
     assert_response :bad_request
   end
 
-  test "get index with valid 'url' parameter" do
+  test "get index with valid 'token' and with valid 'url' parameter" do
     url = "https://test.local/images/sample.jpeg"
     stub_request(url, "sample.jpeg", "jpeg", 400, 713)
 
-    get image_index_url, params: { url: url }
+    get image_index_url, params: { url: url }, headers: @headers
     assert_response :success
   end
 

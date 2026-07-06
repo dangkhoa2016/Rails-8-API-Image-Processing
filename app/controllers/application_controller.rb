@@ -31,6 +31,16 @@ class ApplicationController < ActionController::API
     end
   end
 
+  def authorize_request
+    if current_user.blank?
+      return render json: { errors: I18n.t("errors.unauthorized") }, status: :unauthorized
+    end
+
+    unless current_user.admin?
+      render json: { errors: I18n.t("errors.must_be_administrator") }, status: :unauthorized
+    end
+  end
+
   def configure_permitted_parameters
     fields = [ :first_name, :last_name, :username, :email, :password, :password_confirmation ]
     devise_parameter_sanitizer.permit(:sign_up, keys: fields)
