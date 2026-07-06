@@ -22,6 +22,7 @@ Rate limiting được xử lý bởi gem **rack-attack 6.8** — một Rack mid
 | `sign_in/email` | `/users/sign_in` | POST | 10 request | 60 giây | Email trong body |
 | `registration/ip` | `/users` | POST | 10 request | 1 giờ | IP address |
 | `password_reset/ip` | `/users/password` | POST | 5 request | 1 giờ | IP address |
+| `image/ip` | `/image` | GET | 30 request | 60 giây | IP address |
 
 Hành vi quan trọng:
 - Rack::Attack chạy trước controller, nên những request sau đó trả `401` hoặc `422` vẫn làm tăng counter.
@@ -125,6 +126,17 @@ done
 
 Expected output: `401 401 401 401 401 429`
 
+```bash
+# Trigger image/ip (31 lần, lần 31 phải nhận 429)
+for i in $(seq 1 31); do
+  echo "--- Request $i ---"
+  curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/image?url=https://example.com/image.png"
+  echo
+done
+```
+
+Expected output: 30 request đầu không phải `429`, request thứ 31 trả về `429`
+
 ---
 
 ## Lưu ý khi deploy sau reverse proxy / load balancer
@@ -173,4 +185,4 @@ teardown { Rack::Attack.enabled = true }
 |---|---|
 | `config/initializers/rack_attack.rb` | Toàn bộ config: safelists, throttles, throttled_responder |
 | `config/application.rb` | `config.middleware.use Rack::Attack` — bắt buộc cho API-only app |
-| `test/integration/rate_limit_test.rb` | 5 tests bao phủ tất cả throttle rules |
+| `test/integration/rate_limit_test.rb` | 7 tests bao phủ các throttle rule cho auth và image |
