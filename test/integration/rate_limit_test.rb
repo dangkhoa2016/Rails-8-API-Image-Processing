@@ -1,6 +1,6 @@
 require "test_helper"
 
-# Tests for Rack::Attack rate limiting on auth endpoints.
+# Tests for Rack::Attack rate limiting on auth and image endpoints.
 #
 # Strategy:
 # - Rack::Attack is enabled globally; the safelist excludes 127.0.0.1 / ::1
@@ -15,6 +15,8 @@ class RateLimitTest < ActionDispatch::IntegrationTest
   SIGN_IN_PATH     = "/users/sign_in"
   REGISTRATION_PATH = "/users"
   PASSWORD_PATH    = "/users/password"
+  IMAGE_PATH       = "/image"
+  IMAGE_URL        = "https://example.com/image.png"
 
   setup do
     Rack::Attack.enabled = true
@@ -137,6 +139,25 @@ class RateLimitTest < ActionDispatch::IntegrationTest
     post PASSWORD_PATH,
       params: { user: { email: "overflow@example.local" } }.to_json,
       headers: JSON_HEADERS,
+      env: { "REMOTE_ADDR" => THROTTLE_IP }
+
+    assert_response 429
+    assert_equal "Too many requests. Please try again later.", json_response.fetch("error")
+  end
+
+  # ── Image endpoint throttle ───────────────────────────────────────────────
+
+  test "image endpoint allows up to 30 requests per IP per 60s then throttles" do
+    30.times do |i|
+      get IMAGE_PATH,
+        params: { url: IMAGE_URL },
+        env: { "REMOTE_ADDR" => THROTTLE_IP }
+      assert_not_equal 429, response.status,
+        "Expected request to pass but got 429 on attempt #{i + 1}"
+    end
+
+    get IMAGE_PATH,
+      params: { url: IMAGE_URL },
       env: { "REMOTE_ADDR" => THROTTLE_IP }
 
     assert_response 429

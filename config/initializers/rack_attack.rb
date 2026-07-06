@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Rack::Attack – rate limiting for auth endpoints.
+# Rack::Attack – rate limiting for auth and image endpoints.
 #
 # Limits are intentionally conservative. All throttles key on req.ip unless
 # noted; change to a trusted-proxy-aware IP extractor if the app is deployed
@@ -58,6 +58,12 @@ class Rack::Attack
   # Defends against email-enumeration and reset-link flooding.
   throttle("password_reset/ip", limit: 5, period: 3600) do |req|
     req.ip if req.path == "/users/password" && req.post?
+  end
+
+  # Image render: 30 requests per 60 s per IP.
+  # Defends against abusive image-fetch / transform bursts on a CPU-heavy endpoint.
+  throttle("image/ip", limit: 30, period: 60) do |req|
+    req.ip if req.path == "/image" && req.get?
   end
 
   # ── Throttled response ─────────────────────────────────────────────────────
