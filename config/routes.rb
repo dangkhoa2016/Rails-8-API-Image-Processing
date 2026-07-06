@@ -1,5 +1,9 @@
 Rails.application.routes.draw do
   resources :home, only: [ :index ]
+  resources :image, only: [ :index ]
+
+  get "image" => "image#index"
+  post "image" => "image#index"
 
   devise_for :users, defaults: { format: :json }, controllers: {
     sessions: "users/sessions",
