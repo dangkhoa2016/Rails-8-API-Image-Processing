@@ -11,9 +11,8 @@ Hướng dẫn deploy ứng dụng lên server production sử dụng **Kamal** 
 - Server Linux với SSH access (user `root` hoặc user có sudo)
 - Domain/hostname trỏ về IP của server (cho SSL Let's Encrypt)
 
-Image production đã đóng gói sẵn `sqlite3`, `curl`, và các package runtime nhỏ
-cần thiết cho app, nên ngoài Docker bạn không cần chuẩn bị thêm native
-dependency nào trên server target.
+Image production đã đóng gói sẵn `libvips`, `sqlite3`, và Debian `x265`, nên bạn
+không cần tự cài thêm package xử lý ảnh trên server target ngoài Docker.
 
 ---
 
@@ -159,6 +158,9 @@ Tham khảo `.env.sample` cho các biến mức ứng dụng và `config/deploy.
 | `DEVISE_JWT_SECRET_KEY` | Khuyến nghị | fallback về `secret_key_base` | Rotate độc lập với master key |
 | `CORS_ALLOWED_ORIGINS` | Khuyến nghị | `http://localhost:4000` | Danh sách origin browser được Rack::Cors cho phép, phân tách bằng dấu phẩy |
 | `DEVISE_MAILER_SENDER` | Khuyến nghị | `noreply@example.com` | Đổi sang địa chỉ/domain gửi mail thật |
+| `IMAGE_MAX_RESIZE_WIDTH` | Tùy chọn | `4096` | Chặn sớm các request resize có width quá lớn |
+| `IMAGE_MAX_RESIZE_HEIGHT` | Tùy chọn | `4096` | Chặn sớm các request resize có height quá lớn |
+| `IMAGE_MAX_RESIZE_SCALE` | Tùy chọn | `8` | Chặn sớm các request resize theo scale quá lớn |
 | `SOLID_QUEUE_IN_PUMA` | Tùy chọn | `true` | Đặt `false` nếu chạy job worker riêng |
 | `JOB_CONCURRENCY` | Tùy chọn | `1` | Số worker thread của Solid Queue |
 | `WEB_CONCURRENCY` | Tùy chọn | `1` | Tăng nếu server có nhiều CPU |
@@ -168,13 +170,15 @@ Trong lúc boot production, app cũng log warning nếu không có khóa JWT đ�
 qua environment hoặc Rails credentials, hoặc nếu `DEVISE_MAILER_SENDER` vẫn
 còn là địa chỉ kiểu placeholder `example.com`.
 
-Nếu browser client chạy khác origin và cần đọc response header `Authorization` từ response đăng nhập, hãy cập nhật `config/initializers/cors.rb` để expose header đó rõ ràng. Cấu hình CORS hiện tại cho phép origin đã khai báo nhưng chưa expose custom response header cho JavaScript cross-origin.
+Nếu bạn host browser client ở origin khác và muốn client đó đọc được các response header như `Authorization`, `X-Image-Width`, hoặc `X-Image-Height`, hãy cập nhật `config/initializers/cors.rb` để expose rõ các header này. Cấu hình CORS hiện tại cho phép request từ các origin đã cấu hình nhưng chưa expose các response header đó cho JS cross-origin.
 
 ---
 
 ## SQLite và persistence
 
 Dữ liệu SQLite production được lưu trong Docker volume `rails_8_api_authentication_storage` → mount vào `/rails/storage` bên trong container. Ứng dụng dùng nhiều file SQLite ở đây: `production.sqlite3`, `production_cache.sqlite3`, `production_queue.sqlite3`, và `production_cable.sqlite3`.
+
+Ứng dụng cũng có sẵn các trang smoke test tĩnh tại `/test-render.html` (English) và `/test-render.vi.html` (Tiếng Việt). Khi serve các trang này cùng origin với Rails host, bạn sẽ tránh được vấn đề browser không đọc được header trong các bài test bằng trình duyệt.
 
 **Sao lưu:**
 

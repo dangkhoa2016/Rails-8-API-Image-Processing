@@ -95,6 +95,10 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
   Các yêu cầu vượt quá bất kỳ giới hạn nào sẽ trả về `422 Unprocessable Content`
   trước khi libvips bắt đầu resize tốn kém.
 
+  Trình duyệt từ nguồn gốc khác cũng nên kiểm tra
+  `CORS_ALLOWED_ORIGINS` và nếu cần đọc các header phản hồi như
+  `Authorization`, `X-Image-Width` hay `X-Image-Height`, hãy mở rộng
+  `config/initializers/cors.rb` với các header `expose:` tường minh.
 
 5. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
     ```bash
@@ -123,153 +127,249 @@ Kết quả mong đợi:
 
 Nếu `heif-enc --list-encoders` chỉ hiển thị AVIF và không có bộ mã hóa HEIC/HEIF, `toFormat=heif` sẽ thất bại với lỗi tương tự `heifsave: Unsupported compression`.
 
-## Quick Start xác thực local
+## Xác thực
 
-Luồng này dành cho môi trường local sạch và tương ứng với các route được cover bởi auth integration tests.
+Các điểm cuối API được bảo vệ sử dụng header `Authorization` với Bearer JWT:
 
-1. Chạy ứng dụng bằng `bin/dev` và giữ nó hoạt động tại `http://localhost:3000` (trừ khi bạn đã override `PORT`).
+```
+Authorization: Bearer <token>
+```
 
-2. Đăng ký người dùng mới trong terminal khác.
+Các điểm cuối công khai không yêu cầu JWT bao gồm `/`, `/home`, `/up`, các luồng đăng ký / đăng nhập / xác nhận / đặt lại mật khẩu của Devise và các file tĩnh trong `public/` như `favicon.ico`, `robots.txt`, `test-render.html` và `test-render.vi.html`.
+
+### Đăng ký
 
 ```bash
-curl -sS -X POST http://localhost:3000/users \
+curl -X POST http://localhost:4000/users \
   -H "Content-Type: application/json" \
-  -d '{
-    "user": {
-      "email": "user@example.com",
-      "username": "user1",
-      "password": "password",
-      "password_confirmation": "password"
-    }
-  }' | jq .
+  -d '{"user": {"email": "user@example.com", "password": "password", "password_confirmation": "password"}}'
 ```
 
-3. Lấy confirmation token từ database local.
+Xác nhận email của bạn qua liên kết được gửi đến hộp thư, sau đó đăng nhập.
+
+### Đăng nhập
 
 ```bash
-bin/rails runner 'puts User.find_by!(email: "user@example.com").confirmation_token'
-```
-
-4. Xác nhận tài khoản.
-
-```bash
-curl -sS "http://localhost:3000/users/confirmation?confirmation_token=<token>" | jq .
-```
-
-5. Đăng nhập và lấy JWT từ header `Authorization` trong response.
-
-```bash
-TOKEN=$(curl -is -X POST http://localhost:3000/users/sign_in \
+curl -X POST http://localhost:4000/users/sign_in \
   -H "Content-Type: application/json" \
+  -d '{"user": {"email": "user@example.com", "password": "password"}}' -i
+```
+
+JWT được trả về trong header phản hồi `Authorization`.
+
+### Đăng xuất
+
+```bash
+curl -X DELETE http://localhost:4000/users/sign_out \
+  -H "Authorization: Bearer <token>"
+```
+
+### Hồ sơ
+
+```bash
+curl http://localhost:4000/user/profile \
+  -H "Authorization: Bearer <token>"
+```
+
+Các bí danh tương thích `GET /user/me` và `GET /user/whoami` hiện đang định tuyến đến
+cùng action với `GET /user/profile`.
+
+## API Ảnh
+
+Cả `GET /image` và `POST /image` đều yêu cầu JWT hợp lệ. `GET /image` bị giới hạn
+tốc độ bởi Rack::Attack; `POST /image` hiện được xác thực nhưng không bị giới hạn
+bởi bộ giới hạn tốc độ cấp ứng dụng.
+
+### GET /image
+
+Truyền URL ảnh (bắt buộc dưới dạng `url`, `u` được chấp nhận như bí danh tương thích)
+và các tham số biến đổi dưới dạng chuỗi truy vấn:
+
+```bash
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=300&resize[height]=300&toFormat=webp" \
+  -H "Authorization: Bearer <token>" \
+  --output result.webp
+```
+
+### POST /image
+
+Truyền tham số dưới dạng JSON body:
+
+```bash
+curl -X POST http://localhost:4000/image \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
-    "user": {
-      "email": "user@example.com",
-      "password": "password"
-    }
-  }' | sed -n 's/^authorization: Bearer //p' | tr -d '\r')
+    "url": "https://example.com/photo.jpg",
+    "toFormat": "webp",
+    "resize": {"width": 300, "height": 300}
+  }' --output result.webp
 ```
 
-6. Gọi endpoint profile với JWT.
+Tên tham số biến đổi khớp với tên phương thức libvips (ví dụ: `sharpen`, `resize`, `rotate`, `toFormat`). Xem thư mục `manual/` để biết thêm ví dụ.
+
+### Header phản hồi
+
+Các phản hồi ảnh thành công bao gồm các header siêu dữ liệu sau:
+
+| Header | Ý nghĩa |
+|-----|---------|
+| `X-Image-Width` | Chiều rộng kết xuất cuối cùng (pixel) |
+| `X-Image-Height` | Chiều cao kết xuất cuối cùng (pixel) |
+
+Các header này được trang kiểm thử sử dụng để hiển thị kích thước kết xuất cuối cùng
+ngay cả khi trình duyệt không thể xem trước định dạng trả về trực tiếp.
+
+### Quy tắc tải từ xa
+
+- URL từ xa phải phân giải thành `http` hoặc `https` và không được trỏ đến địa chỉ loopback, private hoặc link-local.
+- Phản hồi upstream phải là `2xx`, có `content-type` bắt đầu bằng `image/` và quá trình tải xuống sẽ bị hủy ngay khi nội dung stream vượt quá 10 MB.
+- Lỗi trong tải xuống, xác thực hoặc xử lý biến đổi trả về `422 Unprocessable Content` với nội dung JSON lỗi.
+
+### Bộ nhớ đệm tải xuống từ xa
+
+Các tải xuống ảnh upstream thành công được lưu trong bộ nhớ đệm trong tiến trình theo
+URL nguồn trong 5 phút, tối đa 64 mục mỗi tiến trình ứng dụng. Điều này giảm các yêu
+cầu lặp lại trong quá trình kiểm thử và các biến đổi lặp trên cùng một nguồn.
+
+Ghi chú:
+- Bộ nhớ đệm bị xóa khi tiến trình ứng dụng khởi động lại.
+- Bộ nhớ đệm không được chia sẻ giữa nhiều tiến trình Puma hoặc nhiều máy chủ.
+
+### Giới hạn an toàn Resize
+
+Để tránh các yêu cầu như `resize[width]=99999&resize[height]=99999` hoặc hệ số
+tỷ lệ rất lớn, API xác thực đầu vào resize dựa trên các giới hạn
+env sau:
+
+| Env | Mặc định | Mục đích |
+|-----|---------|---------|
+| `IMAGE_MAX_RESIZE_WIDTH` | `4096` | Chiều rộng yêu cầu tối đa được chấp nhận |
+| `IMAGE_MAX_RESIZE_HEIGHT` | `4096` | Chiều cao yêu cầu tối đa được chấp nhận |
+| `IMAGE_MAX_RESIZE_SCALE` | `8` | Hệ số tỷ lệ tối đa được chấp nhận |
+
+Ví dụ thất bại:
 
 ```bash
-curl -sS http://localhost:3000/user/profile \
-  -H "Authorization: Bearer ${TOKEN}" | jq .
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=99999&resize[height]=99999" \
+  -H "Authorization: Bearer <token>"
 ```
 
-7. Đăng xuất và thu hồi token.
+Phản hồi:
+
+```json
+{"error":"Resize exceeds allowed limits (max width: 4096, max height: 4096, max scale: 8)"}
+```
+
+### Ví dụ AVIF / HEIF
+
+AVIF:
 
 ```bash
-curl -sS -X DELETE http://localhost:3000/users/sign_out \
-  -H "Authorization: Bearer ${TOKEN}" | jq .
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&toFormat=avif" \
+  -H "Authorization: Bearer <token>" \
+  --output result.avif
 ```
 
-8. (Tùy chọn) Tham khảo thêm các request trong `manual/session.sh`, `manual/registration.sh`, `manual/password.sh`, và `manual/user.sh` cho các trường hợp token không hợp lệ, token hết hạn, reset mật khẩu, và ví dụ quản lý user/admin.
-
-## Môi trường
-
-Sao chép `.env.sample` thành `.env` cho môi trường local:
+HEIF:
 
 ```bash
-cp .env.sample .env
+curl "http://localhost:4000/image?url=https://example.com/photo.jpg&toFormat=heif" \
+  -H "Authorization: Bearer <token>" \
+  --output result.heif
 ```
 
-Các cấu hình đề xuất cho môi trường local:
+Ghi chú:
+- `avif` thường có thể xem trực tiếp trong các trình duyệt hiện đại.
+- `heif` có thể được API tạo thành công nhưng vẫn không xem trước được trong trình duyệt được trang kiểm thử sử dụng. Trong trường hợp đó, hãy tải file về và kiểm tra bằng trình xem hỗ trợ HEIF/HEIC.
+- `GET /image` bị giới hạn tốc độ. Nếu bạn đang kiểm tra nhiều biến thể nhanh chóng, hãy xem [docs/RATE_LIMITING.md](docs/RATE_LIMITING.md).
 
-```env
-RAILS_ENV=development
-RAILS_LOG_TO_STDOUT=true
-PORT=4000
-RAILS_MAX_THREADS=3
+## Kiểm thử trình duyệt
+
+Hai điểm vào kiểm thử tĩnh được phân phối cùng ứng dụng và phục vụ trực tiếp từ
+`public/`:
+
+- `http://localhost:4000/test-render.html` — Tiếng Anh mặc định
+- `http://localhost:4000/test-render.vi.html` — Tiếng Việt
+
+Hành vi hiện tại:
+- Sử dụng Vue 3 CDN, không cần bước build frontend.
+- Các kịch bản được nhóm; mỗi nhóm có nút chạy riêng để tránh kích hoạt tất cả yêu cầu cùng lúc.
+- Mỗi thẻ hiển thị các tham số có thể chỉnh sửa và cho thấy URL yêu cầu chính xác đang được gửi.
+- Các định dạng không xem trước được như một số phản hồi HEIF được hiển thị dưới dạng kết xuất thành công với trạng thái cảnh báo thay vì lỗi cứng.
+
+Truy cập cùng nguồn gốc được khuyến nghị. Nếu bạn mở trang kiểm thử từ nguồn gốc
+khác, trình duyệt sẽ không thể đọc `Authorization` hoặc các header kích thước ảnh
+trừ khi CORS được cấu hình để hiển thị chúng.
+
+## Chạy kiểm thử
+
+```bash
+bin/rails test
 ```
 
-Nếu không thiết lập `PORT`, `bin/dev` sẽ chạy mặc định trên `3000`. File `.env.sample` hiện đặt sẵn `PORT=4000`, nên nếu bạn copy nguyên file này thì local sẽ chạy tại `http://localhost:4000`. Toàn bộ danh sách biến môi trường — bao gồm secret cho production, cấu hình Puma, mailer, admin seed, CORS, và JWT token cho manual scripts — được mô tả trong `.env.sample`.
-
-Với browser client chạy khác origin, cấu hình CORS mặc định cho phép request từ `CORS_ALLOWED_ORIGINS` nhưng **không** expose response header `Authorization`. Nếu frontend cần đọc JWT từ response đăng nhập, hãy cập nhật `config/initializers/cors.rb` để expose header này một cách rõ ràng.
-
-## Code Coverage
-
-Bạn có thể tạo báo cáo coverage local với SimpleCov bằng cách chạy test kèm biến `COVERAGE=1`:
+Với báo cáo độ phủ:
 
 ```bash
 COVERAGE=1 bin/rails test
 ```
 
-Khi bật `COVERAGE=1`, test suite sẽ chạy không dùng Rails parallel workers để báo cáo SimpleCov không bị sai lệch.
+Khi `COVERAGE=1` được đặt, bộ kiểm thử chạy không có worker song song Rails để báo cáo SimpleCov giữ được độ chính xác.
 
-Báo cáo sẽ được ghi vào `public/coverage`. Khi Rails server đang chạy trong môi trường development, bạn có thể mở `http://localhost:3000/coverage` để xem report mới nhất. Endpoint này chỉ bật ở development và chỉ redirect tới báo cáo HTML tĩnh.
+Báo cáo được ghi vào `public/coverage`. Khi máy chủ Rails đang chạy ở môi trường development, mở `http://localhost:4000/coverage` để xem báo cáo mới nhất. Điểm cuối chỉ dành cho development này chuyển hướng đến báo cáo HTML tĩnh.
 
-Về bên trong, ứng dụng redirect `/coverage` sang `/coverage/` trước khi static file server xử lý request. Dấu `/` ở cuối là cần thiết vì HTML do SimpleCov sinh ra tham chiếu asset theo dạng đường dẫn tương đối như `./assets/...`.
+Nội bộ, ứng dụng chuyển hướng `/coverage` đến `/coverage/` trước khi máy chủ file tĩnh xử lý yêu cầu. Dấu gạch chéo ở cuối rất quan trọng vì SimpleCov HTML được tạo tham chiếu đến tài sản với đường dẫn tương đối như `./assets/...`.
 
-## Contract Route hiện tại
+## Hợp đồng tuyến đường hiện tại
 
-Các route dưới đây phản ánh `config/routes.rb` và implementation hiện tại của controller.
+Hợp đồng tuyến đường dưới đây phản ánh `config/routes.rb` và triển khai controller hiện tại.
 
-### Route xác thực
+### Tuyến đường xác thực
 
-| Method    | Path                  | Mục đích                                           |
-| --------- | --------------------- | -------------------------------------------------- |
-| POST      | `/users`              | Đăng ký tài khoản mới                              |
-| POST      | `/users/sign_in`      | Đăng nhập và nhận JWT trong header `Authorization` |
-| DELETE    | `/users/sign_out`     | Đăng xuất và thu hồi token hiện tại                |
-| GET       | `/users/confirmation` | Xác nhận email qua flow confirmable của Devise     |
-| POST      | `/users/password`     | Gửi email đặt lại mật khẩu                         |
-| PUT/PATCH | `/users/password`     | Đặt lại mật khẩu với token                         |
-| PUT/PATCH | `/users`              | Cập nhật tài khoản đang đăng nhập                  |
-| DELETE    | `/users`              | Xóa tài khoản đang đăng nhập                       |
+| Phương thức | Đường dẫn | Mục đích |
+| --- | --- | --- |
+| POST | `/users` | Đăng ký tài khoản mới |
+| POST | `/users/sign_in` | Đăng nhập và nhận JWT trong header phản hồi `Authorization` |
+| DELETE | `/users/sign_out` | Đăng xuất và thu hồi token hiện tại |
+| GET | `/users/confirmation` | Xác nhận email qua luồng confirmable của Devise |
+| POST | `/users/password` | Gửi hướng dẫn đặt lại mật khẩu |
+| PUT/PATCH | `/users/password` | Đặt lại mật khẩu bằng token |
+| PUT/PATCH | `/users` | Cập nhật tài khoản đã đăng nhập hiện tại |
+| DELETE | `/users` | Xóa tài khoản đã đăng nhập hiện tại |
 
-### Route hồ sơ
+### Tuyến đường hồ sơ
 
-| Method | Path            | Mục đích             |
-| ------ | --------------- | -------------------- |
-| GET    | `/user/profile` | Endpoint hồ sơ chính |
-| GET    | `/user/me`      | Alias tương thích    |
-| GET    | `/user/whoami`  | Alias tương thích    |
+| Phương thức | Đường dẫn | Mục đích |
+| --- | --- | --- |
+| GET | `/user/profile` | Điểm cuối hồ sơ chính |
+| GET | `/user/me` | Bí danh tương thích |
+| GET | `/user/whoami` | Bí danh tương thích |
 
-Cả ba route hồ sơ này cùng trỏ vào một action controller và trả về cùng một cấu trúc response.
+Cả ba tuyến đường hồ sơ đều truy cập cùng một action controller và trả về cùng một cấu trúc tải trọng.
 
-### Route quản lý người dùng & admin
+### Tuyến đường quản trị và quản lý người dùng
 
-| Method | Path            | Mục đích                                    |
-| ------ | --------------- | ------------------------------------------- |
-| GET    | `/users`        | Lấy danh sách người dùng (chỉ admin)        |
-| POST   | `/users/create` | Tạo người dùng (admin)                      |
-| GET    | `/users/:id`    | Xem người dùng (admin hoặc chính mình)      |
-| PUT    | `/users/:id`    | Cập nhật người dùng (admin hoặc chính mình) |
-| DELETE | `/users/:id`    | Xóa người dùng (admin hoặc chính mình)      |
+| Phương thức | Đường dẫn | Mục đích |
+| --- | --- | --- |
+| GET | `/users` | Danh sách người dùng, chỉ admin |
+| POST | `/users/create` | Tạo người dùng với tư cách admin |
+| GET | `/users/:id` | Xem người dùng; admin hoặc chính người đó |
+| PUT | `/users/:id` | Cập nhật người dùng; admin hoặc chính người đó |
+| DELETE | `/users/:id` | Xóa người dùng; admin hoặc chính người đó |
 
-### Route tiện ích
+### Tuyến đường tiện ích
 
-| Method | Path    | Mục đích                                 |
-| ------ | ------- | ---------------------------------------- |
-| GET    | `/`     | Endpoint chào mừng ở root                |
-| GET    | `/home` | Alias của endpoint chào mừng             |
-| GET    | `/up`   | Health check cho uptime monitor/balancer |
+| Phương thức | Đường dẫn | Mục đích |
+| --- | --- | --- |
+| GET | `/` | Điểm cuối chào mừng gốc |
+| GET | `/home` | Bí danh chào mừng |
+| GET | `/up` | Kiểm tra sức khỏe cho uptime/load balancers |
 
-## Ghi chú về format request
+## Ghi chú định dạng yêu cầu
 
-Các endpoint của Devise yêu cầu payload được lồng dưới key `user`. Với endpoint đăng ký `POST /users`, trường `username` là bắt buộc.
+Các điểm cuối Devise mong đợi tải trọng lồng dưới khóa `user`.
 
-Ví dụ request đăng ký:
+Ví dụ yêu cầu đăng ký:
 
 ```json
 {
@@ -282,7 +382,7 @@ Ví dụ request đăng ký:
 }
 ```
 
-Ví dụ request đăng nhập:
+Ví dụ yêu cầu đăng nhập:
 
 ```json
 {
@@ -293,19 +393,19 @@ Ví dụ request đăng nhập:
 }
 ```
 
-Request self-service cập nhật tài khoản trên `PUT /users` hoặc `PATCH /users` bắt buộc phải có `current_password`. Các request admin-managed trên `PUT /users/:id` đi qua `UsersController` nên không yêu cầu `current_password`.
+Cập nhật tài khoản tự phục vụ trên `PUT /users` hoặc `PATCH /users` phải bao gồm `current_password`. Cập nhật do admin quản lý trên `PUT /users/:id` đi qua `UsersController` và không yêu cầu `current_password`.
 
-Endpoint profile cũng có 2 kiểu lỗi xác thực khác nhau:
+Tra cứu hồ sơ cũng có hai chế độ thất bại không xác thực:
 
-- Token thiếu, hết hạn, hoặc đã bị thu hồi: `422` với `user: null` và `token_info`
-- Token bị lỗi format/malformed: `422` với `{ "error": "Invalid token" }`
+- Token thiếu, hết hạn hoặc bị thu hồi: `422` với `user: null` kèm `token_info`
+- Token không hợp lệ: `422` với `{ "error": "Invalid token" }`
 
 ## Luồng ví dụ
 
 ### 1. Đăng ký
 
 ```bash
-curl -X POST http://localhost:3000/users \
+curl -X POST http://localhost:4000/users \
   -H "Content-Type: application/json" \
   -d '{
     "user": {
@@ -319,14 +419,16 @@ curl -X POST http://localhost:3000/users \
 
 ### 2. Xác nhận email
 
+Sử dụng liên kết xác nhận do Devise tạo, ví dụ:
+
 ```bash
-curl "http://localhost:3000/users/confirmation?confirmation_token=<token>"
+curl "http://localhost:4000/users/confirmation?confirmation_token=<token>"
 ```
 
 ### 3. Đăng nhập
 
 ```bash
-curl -i -X POST http://localhost:3000/users/sign_in \
+curl -i -X POST http://localhost:4000/users/sign_in \
   -H "Content-Type: application/json" \
   -d '{
     "user": {
@@ -336,54 +438,65 @@ curl -i -X POST http://localhost:3000/users/sign_in \
   }'
 ```
 
-JWT được trả về trong header `Authorization`.
+JWT được trả về trong header phản hồi `Authorization`.
 
-### 4. Xem hồ sơ
+### 4. Đọc hồ sơ
 
 ```bash
-curl http://localhost:3000/user/profile \
+curl http://localhost:4000/user/profile \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
-`/user/me` và `/user/whoami` là các alias tương thích cho cùng một response.
+`/user/me` và `/user/whoami` là các bí danh tương thích cho cùng một phản hồi.
 
 ### 5. Đăng xuất
 
 ```bash
-curl -X DELETE http://localhost:3000/users/sign_out \
+curl -X DELETE http://localhost:4000/users/sign_out \
   -H "Authorization: Bearer <jwt_token>"
 ```
 
 ## Tài liệu tham khảo thủ công
 
-Các file dưới đây chứa ví dụ curl để copy/paste, dùng làm tài liệu tham khảo:
+Các file dưới đây phản ánh triển khai hiện tại chính xác hơn các ví dụ README gốc, nhưng chúng bao gồm các khối đầu ra mẫu và nên được xem như ghi chú tham khảo thay vì script shell thực thi nguyên văn:
 
-* [manual/registration.sh](./manual/registration.sh)
-* [manual/session.sh](./manual/session.sh)
-* [manual/password.sh](./manual/password.sh)
-* [manual/user.sh](./manual/user.sh)
+- [manual/registration.sh](./manual/registration.sh)
+- [manual/session.sh](./manual/session.sh)
+- [manual/password.sh](./manual/password.sh)
+- [manual/user.sh](./manual/user.sh)
 
-## Tài liệu chuyên sâu
+## Tài liệu bổ sung
 
-Thư mục `docs/` chứa các ghi chú chi tiết hơn về implementation và vận hành của hệ thống xác thực hiện tại:
+Thư mục `docs/` chứa các ghi chú triển khai và vận hành sâu hơn cho ngăn xếp xác thực hiện tại:
 
-* [docs/ACCESS_CONTROL.vi.md](./docs/ACCESS_CONTROL.vi.md) - Quy tắc phân quyền cho guest, self-service, và admin
-* [docs/JWT_LIFECYCLE.vi.md](./docs/JWT_LIFECYCLE.vi.md) - Vòng đời JWT, metadata ở endpoint profile, thu hồi, và dọn dẹp denylist
-* [docs/RATE_LIMITING.vi.md](./docs/RATE_LIMITING.vi.md) - Các ngưỡng Rack::Attack hiện tại, response khi throttle, và lưu ý sau reverse proxy
-* [docs/DEPLOYMENT.vi.md](./docs/DEPLOYMENT.vi.md) - Triển khai với Kamal, Docker, biến môi trường, health check, và persistence của SQLite
+- [docs/ACCESS_CONTROL.md](./docs/ACCESS_CONTROL.md) - Quy tắc ủy quyền cho luồng khách, tự phục vụ và admin
+- [docs/JWT_LIFECYCLE.md](./docs/JWT_LIFECYCLE.md) - Phát hành JWT, siêu dữ liệu token hồ sơ, thu hồi và dọn dẹp
+- [docs/RATE_LIMITING.md](./docs/RATE_LIMITING.md) - Ngưỡng Rack::Attack hiện tại, phản hồi lỗi và cân nhắc proxy
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Kamal, Docker, biến môi trường, kiểm tra sức khỏe và bền vững SQLite
 
 ## Kế hoạch cải tiến
 
-Các tài liệu theo dõi cải tiến hiện có nằm trong thư mục `manual/`:
+Các artifact cải tiến dự án được theo dõi trong:
 
-* [manual/PROJECT_IMPROVEMENT_REPORT.md](./manual/PROJECT_IMPROVEMENT_REPORT.md)
-* [manual/IMPLEMENTATION_TRACKER.md](./manual/IMPLEMENTATION_TRACKER.md)
+- [manual/PROJECT_IMPROVEMENT_REPORT.md](./manual/PROJECT_IMPROVEMENT_REPORT.md)
+- [manual/IMPLEMENTATION_TRACKER.md](./manual/IMPLEMENTATION_TRACKER.md)
+
+## Tài liệu bổ sung
+
+- [docs/ACCESS_CONTROL.md](docs/ACCESS_CONTROL.md)
+- [docs/JWT_LIFECYCLE.md](docs/JWT_LIFECYCLE.md)
+- [docs/RATE_LIMITING.md](docs/RATE_LIMITING.md)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Dự án liên quan
 
-Dự án này có một phiên bản Node.js triển khai các khái niệm xác thực tương tự (JWT, kiểm soát truy cập theo vai trò, thu hồi token) trên một stack khác:
+Dự án này được phát triển dựa trên các dự án nền tảng và có các phiên bản song song trên các stack khác:
 
-- **[dangkhoa2016/Nodejs-API-Authentication](https://github.com/dangkhoa2016/Nodejs-API-Authentication)** — Một REST API sẵn sàng cho production dành cho xác thực và quản lý người dùng, được xây dựng bằng **Hono**, **Sequelize**, **bcryptjs**, **JWT**, và **SQLite** (dev) / **Postgres** (prod).
+| Dự án | Mô tả |
+|-------|-------|
+| [Rails-8-API-Authentication](https://github.com/dangkhoa2016/Rails-8-API-Authentication) | Dự án nền tảng cung cấp lớp xác thực JWT cốt lõi (Devise + devise-jwt), kiểm soát truy cập, và cấu trúc Rails 8 API |
+| [Nodejs-API-Authentication](https://github.com/dangkhoa2016/Nodejs-API-Authentication) | Dự án nền tảng tương tự trên stack Node.js (Express, JWT, SQLite) |
+| [Nodejs-API-Image-Processing](https://github.com/dangkhoa2016/Nodejs-API-Image-Processing) | Phiên bản Node.js của dự án này, sử dụng thư viện **Sharp** để xử lý ảnh thay cho libvips |
 
 ## License
 
