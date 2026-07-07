@@ -11,8 +11,7 @@ Hướng dẫn deploy ứng dụng lên server production sử dụng **Kamal** 
 - Server Linux với SSH access (user `root` hoặc user có sudo)
 - Domain/hostname trỏ về IP của server (cho SSL Let's Encrypt)
 
-Image production đã đóng gói sẵn `libvips`, `sqlite3`, và Debian `x265`, nên bạn
-không cần tự cài thêm package xử lý ảnh trên server target ngoài Docker.
+Image production đã đóng gói sẵn `libvips`, `sqlite3`, và Debian `x265`, nên bạn không cần tự cài thêm package xử lý ảnh trên server target ngoài Docker.
 
 ---
 
@@ -170,13 +169,60 @@ Trong lúc boot production, app cũng log warning nếu không có khóa JWT đ�
 qua environment hoặc Rails credentials, hoặc nếu `DEVISE_MAILER_SENDER` vẫn
 còn là địa chỉ kiểu placeholder `example.com`.
 
-Nếu bạn host browser client ở origin khác và muốn client đó đọc được các response header như `Authorization`, `X-Image-Width`, hoặc `X-Image-Height`, hãy cập nhật `config/initializers/cors.rb` để expose rõ các header này. Cấu hình CORS hiện tại cho phép request từ các origin đã cấu hình nhưng chưa expose các response header đó cho JS cross-origin.
+Nếu bạn host browser client ở origin khác và muốn client đó đọc được các
+response header như `Authorization`, `X-Image-Width`, hoặc `X-Image-Height`,
+hãy cập nhật `config/initializers/cors.rb` để expose rõ các header này. Cấu
+hình CORS hiện tại cho phép request từ các origin đã cấu hình nhưng chưa
+expose các response header đó cho JS cross-origin.
+
+---
+
+## Cấu hình Email / SMTP
+
+Ứng dụng sử dụng Devise cho xác thực và gửi email xác nhận khi người dùng đăng ký.
+Trong môi trường production (Docker), cấu hình SMTP server qua các biến môi trường:
+
+| Biến | Bắt buộc | Mặc định | Mô tả |
+|---|---|---|---|
+| `SMTP_ADDRESS` | ✅ | — | Hostname SMTP server (vd: `smtp.sendgrid.net`, `smtp.mailgun.org`) |
+| `SMTP_PORT` | Tùy chọn | `587` | Cổng SMTP server |
+| `SMTP_USERNAME` | ✅ | — | Tên đăng nhập SMTP |
+| `SMTP_PASSWORD` | ✅ | — | Mật khẩu SMTP |
+| `SMTP_DOMAIN` | Tùy chọn | — | Domain HELO |
+| `SMTP_AUTHENTICATION` | Tùy chọn | `plain` | Phương thức xác thực (`plain`, `login`, `cram_md5`) |
+| `MAILER_HOST` | ✅ | `localhost` | Hostname dùng trong link xác nhận email |
+| `DEVISE_MAILER_SENDER` | Khuyến nghị | `noreply@example.com` | Địa chỉ "From" hiển thị trong email |
+
+### Test nhanh với Mailpit
+
+Để test email mà không cần SMTP thật, chạy Mailpit cùng ứng dụng:
+
+```bash
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+Sau đó khởi động container app với:
+
+```bash
+docker run -d -p 80:3000 \
+  -e SMTP_ADDRESS="host.docker.internal" \
+  -e SMTP_PORT=1025 \
+  -e MAILER_HOST="localhost" \
+  --name rails_8_api_image_processing \
+  rails_8_api_image_processing
+```
+
+Mở http://localhost:8025 để xem email đã gửi.
 
 ---
 
 ## SQLite và persistence
 
-Dữ liệu SQLite production được lưu trong Docker volume `rails_8_api_authentication_storage` → mount vào `/rails/storage` bên trong container. Ứng dụng dùng nhiều file SQLite ở đây: `production.sqlite3`, `production_cache.sqlite3`, `production_queue.sqlite3`, và `production_cable.sqlite3`.
+Dữ liệu SQLite production được lưu trong Docker volume
+`rails_8_api_image_processing_storage` → mount vào `/rails/storage` bên trong
+container. Ứng dụng dùng nhiều file SQLite ở đây: `production.sqlite3`,
+`production_cache.sqlite3`, `production_queue.sqlite3`, và
+`production_cable.sqlite3`.
 
 Ứng dụng cũng có sẵn các trang smoke test tĩnh tại `/test-render.html` (English) và `/test-render.vi.html` (Tiếng Việt). Khi serve các trang này cùng origin với Rails host, bạn sẽ tránh được vấn đề browser không đọc được header trong các bài test bằng trình duyệt.
 

@@ -55,16 +55,32 @@ Rails.application.configure do
   # config.action_mailer.raise_delivery_errors = false
 
   # Set host to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "example.com" }
+  # MAILER_HOST must be the full hostname as seen by the end user
+  # (e.g. "example.com" or "localhost:4000").  Do not set MAILER_PORT
+  # separately unless the public URL uses a non‑standard port.
+  config.action_mailer.default_url_options = {
+    host: ENV.fetch("MAILER_HOST", "localhost"),
+    protocol: ENV.fetch("MAILER_PROTOCOL", "https")
+  }.compact
 
-  # Specify outgoing SMTP server. Remember to add smtp/* credentials via rails credentials:edit.
-  # config.action_mailer.smtp_settings = {
-  #   user_name: Rails.application.credentials.dig(:smtp, :user_name),
-  #   password: Rails.application.credentials.dig(:smtp, :password),
-  #   address: "smtp.example.com",
-  #   port: 587,
-  #   authentication: :plain
-  # }
+  # Specify outgoing SMTP server via environment variables (for Docker/production).
+  # Supported providers: SendGrid, Mailgun, Postmark, or any SMTP server.
+  if ENV["SMTP_ADDRESS"].present?
+    smtp_settings = {
+      address: ENV["SMTP_ADDRESS"],
+      port: ENV.fetch("SMTP_PORT", 587).to_i,
+      domain: ENV["SMTP_DOMAIN"],
+      enable_starttls_auto: true
+    }
+    if ENV["SMTP_USERNAME"].present?
+      smtp_settings.merge!(
+        user_name: ENV["SMTP_USERNAME"],
+        password: ENV["SMTP_PASSWORD"],
+        authentication: ENV.fetch("SMTP_AUTHENTICATION", "plain").to_sym
+      )
+    end
+    config.action_mailer.smtp_settings = smtp_settings
+  end
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).

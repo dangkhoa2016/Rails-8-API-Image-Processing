@@ -178,6 +178,46 @@ origins but does not expose those response headers to cross-origin browser JS.
 
 ---
 
+## Email / SMTP Configuration
+
+The app uses Devise for authentication and sends confirmation emails on user
+registration. In production (Docker), configure an SMTP server via environment
+variables:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SMTP_ADDRESS` | ✅ | — | SMTP server hostname (e.g. `smtp.sendgrid.net`, `smtp.mailgun.org`) |
+| `SMTP_PORT` | Optional | `587` | SMTP server port |
+| `SMTP_USERNAME` | ✅ | — | SMTP login username |
+| `SMTP_PASSWORD` | ✅ | — | SMTP login password |
+| `SMTP_DOMAIN` | Optional | — | HELO domain |
+| `SMTP_AUTHENTICATION` | Optional | `plain` | Authentication method (`plain`, `login`, `cram_md5`) |
+| `MAILER_HOST` | ✅ | `localhost` | Hostname used in email confirmation links |
+| `DEVISE_MAILER_SENDER` | Recommended | `noreply@example.com` | "From" address shown in emails |
+
+### Quick local test with Mailpit
+
+To test email without a real SMTP provider, run Mailpit alongside the app:
+
+```bash
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+Then start the app container with:
+
+```bash
+docker run -d -p 80:3000 \
+  -e SMTP_ADDRESS="host.docker.internal" \
+  -e SMTP_PORT=1025 \
+  -e MAILER_HOST="localhost" \
+  --name rails_8_api_image_processing \
+  rails_8_api_image_processing
+```
+
+Open http://localhost:8025 to view sent emails.
+
+---
+
 ## SQLite and persistence
 
 Production SQLite data is stored in Docker volume `rails_8_api_authentication_storage` → mounted at `/rails/storage` inside the container. The app uses multiple SQLite files there: `production.sqlite3`, `production_cache.sqlite3`, `production_queue.sqlite3`, and `production_cable.sqlite3`.
