@@ -19,15 +19,18 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
 - Tra cứu hồ sơ kèm thông tin token qua `/user/profile` và các bí danh tương thích.
 - Cập nhật và xóa tài khoản tự phục vụ.
 - Danh sách người dùng, tạo người dùng, cập nhật vai trò và xóa người dùng chỉ dành cho quản trị viên.
-- Bảo vệ SSRF: chặn địa chỉ loopback, private và link-local, bao gồm IPv6 `fe80::/10`.
-- Giới hạn kích thước phản hồi (10 MB) để ngăn cạn kiệt bộ nhớ.
-- Giới hạn tốc độ trên các điểm cuối đăng nhập, đăng ký và đặt lại mật khẩu.
 - Dọn dẹp danh sách chặn JWT qua Active Job và Rake task.
 - Docker + Kamal deployment scaffolding với điểm cuối kiểm tra sức khỏe.
 - Xuất ảnh đã biến đổi sang các định dạng phổ biến gồm `jpg`, `png`, `webp`, `avif` và `heif`.
 - Xác thực JWT qua [devise-jwt](https://github.com/waiting-for-dev/devise-jwt).
+- Bảo vệ SSRF: chặn địa chỉ loopback, private và link-local, bao gồm IPv6 `fe80::/10`.
+- Giới hạn tải xuống từ xa khi phát trực tuyến (10 MB) hủy các body upstream quá lớn trước khi toàn bộ payload được đệm.
+- Đệm ảnh từ xa trong quy trình cho các lần tải thành công: TTL 5 phút, tối đa 64 mục trên mỗi quy trình ứng dụng.
+- Phản hồi ảnh thành công bao gồm các header `X-Image-Width` và `X-Image-Height`.
+- Giới hạn tốc độ trên các endpoint xác thực và `GET /image` qua Rack::Attack.
+- Các trang smoke-test tích hợp sẵn trong trình duyệt bằng tiếng Anh và tiếng Việt trong `public/`.
 
-## Công nghệ
+## Công nghệ sử dụng
 
 | Gem | Mục đích |
 |-----|---------|
@@ -36,6 +39,14 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
 | [devise](https://github.com/heartcombo/devise) + [devise-jwt](https://github.com/waiting-for-dev/devise-jwt) | Xác thực |
 | [rack-cors](https://github.com/cyu/rack-cors) | Header CORS |
 | [rack-attack](https://github.com/rack/rack-attack) | Giới hạn tốc độ |
+| [color_conversion](https://github.com/ianks/color_conversion) | Chuyển đổi màu sắc cho xử lý ảnh |
+| [puma](https://github.com/puma/puma) | Web server |
+| [solid_cache](https://github.com/rails/solid_cache) | Bộ đệm dùng cơ sở dữ liệu |
+| [solid_queue](https://github.com/rails/solid_queue) | Hàng đợi job dùng cơ sở dữ liệu |
+| [solid_cable](https://github.com/rails/solid_cable) | Bộ điều hợp Action Cable dùng cơ sở dữ liệu |
+| [kamal](https://github.com/basecamp/kamal) | Triển khai Docker |
+| [thruster](https://github.com/basecamp/thruster) | Nén/bộ nhớ đệm asset HTTP |
+| [dotenv](https://github.com/bkeepers/dotenv) | Tải biến môi trường |
 | Rails 8 + SQLite | Framework và cơ sở dữ liệu |
 
 ## Bắt đầu nhanh
@@ -77,9 +88,8 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
     cp .env.sample .env
     ```
 
-  Giới hạn an toàn kích thước có thể cấu hình qua env để bảo vệ máy chủ khỏi các
-
-  yêu cầu render cực lớn:
+  Giới hạn an toàn kích thước có thể cấu hình qua env để bảo vệ máy chủ khỏi
+  các yêu cầu render cực lớn:
 
   ```bash
   IMAGE_MAX_RESIZE_WIDTH=4096
@@ -89,6 +99,11 @@ Máy chủ API Rails 8 tải xuống và biến đổi ảnh bằng [libvips](ht
 
   Các yêu cầu vượt quá bất kỳ giới hạn nào sẽ trả về `422 Unprocessable Content`
   trước khi libvips bắt đầu resize tốn kém.
+
+  Client trình duyệt được phục vụ từ nguồn gốc khác cũng nên xem xét
+  `CORS_ALLOWED_ORIGINS` và, nếu chúng cần đọc các header phản hồi như
+  `Authorization`, `X-Image-Width`, hoặc `X-Image-Height`, mở rộng
+  `config/initializers/cors.rb` với các header `expose:` rõ ràng.
 
 5. Thiết lập cơ sở dữ liệu và tạo người dùng admin:
     ```bash
@@ -119,11 +134,13 @@ Nếu `heif-enc --list-encoders` chỉ hiển thị AVIF mà không có bộ mã
 
 ## Xác thực
 
-Tất cả các điểm cuối (trừ route Devise) yêu cầu một JWT hợp lệ trong header `Authorization`:
+Các endpoint API được bảo vệ sử dụng header `Authorization` với JWT Bearer:
 
 ```
 Authorization: Bearer <token>
 ```
+
+Các endpoint công khai không yêu cầu JWT bao gồm `/`, `/home`, `/up`, các luồng đăng ký/đăng nhập/xác nhận/đặt lại mật khẩu Devise, và các file tĩnh trong `public/` như `favicon.ico`, `robots.txt`, `test-render.html`, và `test-render.vi.html`.
 
 ### Đăng ký
 
@@ -159,11 +176,19 @@ curl http://localhost:4000/user/profile \
   -H "Authorization: Bearer <token>"
 ```
 
+Các bí danh tương thích `GET /user/me` và `GET /user/whoami` hiện đang route đến
+cùng một action với `GET /user/profile`.
+
 ## API Ảnh
+
+Cả `GET /image` và `POST /image` đều yêu cầu JWT hợp lệ. `GET /image` bị giới hạn
+tốc độ bởi Rack::Attack; `POST /image` hiện được xác thực nhưng không bị throttle
+bởi bộ giới hạn tốc độ cấp ứng dụng.
 
 ### GET /image
 
-Truyền URL ảnh và các tham số biến đổi dưới dạng query string:
+Truyền URL ảnh (bắt buộc dưới dạng `url`, với `u` được chấp nhận như bí danh
+tương thích) và các tham số biến đổi dưới dạng query string:
 
 ```bash
 curl "http://localhost:4000/image?url=https://example.com/photo.jpg&resize[width]=300&resize[height]=300&toFormat=webp" \
@@ -188,10 +213,39 @@ curl -X POST http://localhost:4000/image \
 
 Tên tham số biến đổi khớp với tên phương thức libvips (ví dụ: `sharpen`, `resize`, `rotate`, `toFormat`). Xem thư mục `manual/` để biết thêm ví dụ.
 
+### Response Headers
+
+Phản hồi ảnh thành công bao gồm các header metadata sau:
+
+| Header | Ý nghĩa |
+|-----|---------|
+| `X-Image-Width` | Chiều rộng render cuối cùng theo pixel |
+| `X-Image-Height` | Chiều cao render cuối cùng theo pixel |
+
+Các header này được sử dụng bởi trang smoke-test để hiển thị kích thước render
+cuối cùng ngay cả khi trình duyệt không thể xem trước định dạng được trả về trực tiếp.
+
+### Quy tắc tải từ xa
+
+- URL từ xa phải phân giải thành `http` hoặc `https` và không được trỏ đến địa chỉ loopback, private hoặc link-local.
+- Phản hồi upstream phải là `2xx`, có `content-type` bắt đầu bằng `image/`, và quá trình tải bị hủy ngay khi body phát trực tuyến vượt quá 10 MB.
+- Lỗi trong quá trình tải, xác nhận hoặc xử lý biến đổi trả về `422 Unprocessable Content` với body lỗi JSON.
+
+### Đệm tải xuống từ xa
+
+Các lần tải ảnh upstream thành công được đệm trong quy trình theo URL nguồn trong 5
+phút, tối đa 64 mục trên mỗi quy trình ứng dụng. Điều này giảm thiểu các yêu cầu
+hotlink lặp lại trong quá trình smoke test và các biến đổi lặp lại đối với cùng một nguồn.
+
+Ghi chú:
+- Bộ đệm bị xóa khi quy trình ứng dụng khởi động lại.
+- Bộ đệm không được chia sẻ giữa nhiều quy trình Puma hoặc nhiều máy chủ.
+
 ### Giới hạn an toàn Resize
 
 Để tránh các yêu cầu như `resize[width]=99999&resize[height]=99999` hoặc hệ số
-tỷ lệ rất lớn, API xác thực đầu vào resize dựa trên các giới hạn env sau:
+tỷ lệ rất lớn, API xác thực đầu vào resize
+dựa trên các giới hạn env sau:
 
 | Env | Mặc định | Mục đích |
 |-----|---------|---------|
@@ -234,6 +288,24 @@ Ghi chú:
 - `avif` thường có thể xem trước trực tiếp trong các trình duyệt hiện đại.
 - `heif` có thể được API sinh thành công nhưng vẫn thất bại khi xem trước trong trình duyệt dùng bởi trang smoke-test. Trong trường hợp đó, tải file xuống và kiểm tra bằng trình xem hỗ trợ HEIF/HEIC.
 - `GET /image` bị giới hạn tốc độ. Nếu bạn kiểm tra nhiều biến thể nhanh, hãy xem [docs/RATE_LIMITING.md](docs/RATE_LIMITING.md).
+
+## Kiểm thử Smoke-test Trình duyệt
+
+Hai điểm smoke-test tĩnh được cung cấp cùng với ứng dụng và được phục vụ trực tiếp
+từ `public/`:
+
+- `http://localhost:4000/test-render.html` — Mặc định tiếng Anh
+- `http://localhost:4000/test-render.vi.html` — Biến thể tiếng Việt
+
+Hành vi hiện tại:
+- Sử dụng Vue 3 CDN, nên không cần bước build frontend.
+- Các kịch bản được nhóm lại; mỗi nhóm có nút chạy riêng để tránh gửi tất cả yêu cầu cùng lúc.
+- Mỗi thẻ hiển thị các tham số có thể chỉnh sửa và hiển thị URL yêu cầu chính xác được gửi.
+- Các định dạng không thể xem trước như một số phản hồi HEIF được hiển thị dưới dạng render thành công với trạng thái cảnh báo thay vì lỗi nghiêm trọng.
+
+Khuyến nghị truy cập cùng nguồn gốc. Nếu bạn mở trang smoke-test từ
+một nguồn gốc khác, trình duyệt sẽ không thể đọc `Authorization` hoặc
+các header kích thước ảnh trừ khi CORS được cấu hình để hiển thị chúng.
 
 ## Chạy kiểm thử
 
@@ -416,13 +488,16 @@ Các tài liệu cải tiến dự án được theo dõi trong:
 
 ## Dự án liên quan
 
-Dự án này có một bản triển khai Node.js anh em bao phủ các khái niệm xác thực tương tự (JWT, kiểm soát truy cập theo vai trò, thu hồi token) trên một stack khác:
+Dự án này được xây dựng và có các dự án tương đương trên các stack khác:
 
-- **[dangkhoa2016/Nodejs-API-Authentication](https://github.com/dangkhoa2016/Nodejs-API-Authentication)** — Một REST API sẵn sàng cho production dành cho xác thực và quản lý người dùng, được xây dựng bằng **Hono**, **Sequelize**, **bcryptjs**, **JWT**, **SQLite** (dev) và **Postgres** (prod).
+| Dự án | Mô tả |
+|---------|-------------|
+| [Rails-8-API-Authentication](https://github.com/dangkhoa2016/Rails-8-API-Authentication) | Dự án gốc cung cấp lớp xác thực JWT cốt lõi (Devise + devise-jwt), kiểm soát truy cập và cấu trúc Rails 8 API |
+| [Nodejs-API-Authentication](https://github.com/dangkhoa2016/Nodejs-API-Authentication) | Dự án gốc tương đương trên stack Node.js (Express, JWT, SQLite) |
+| [Nodejs-API-Image-Processing](https://github.com/dangkhoa2016/Nodejs-API-Image-Processing) | Dự án Node.js tương đương của dự án này, sử dụng **Sharp** để xử lý ảnh thay vì libvips |
 
 ## License
 
 Dự án này được cấp phép theo MIT License.
 
 Xem file [LICENSE](LICENSE) để biết thêm chi tiết.
-
