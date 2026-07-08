@@ -66,6 +66,6 @@ gem "rack-attack"
 
 gem "ruby-vips", "~> 2.2"
 
-gem "faraday", "~> 2.12"
+gem "faraday", "~> 2.14"
 
 gem "color_conversion", "~> 0.1.2"
