@@ -1,15 +1,55 @@
+IMAGE=rails_8_api_image_processing
 
+# Build
+docker build -t $IMAGE .
+
+# Run with Mailpit for local email testing
+# First start Mailpit (SMTP + web UI):
+#   docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+#
+# Then start the app (Mailpit on gateway 172.17.0.1):
+docker run -d -p 80:3000 \
+  -e SMTP_ADDRESS="172.17.0.1" \
+  -e SMTP_PORT=1025 \
+  -e RAILS_MASTER_KEY=$(cat config/master.key) \
+  -e MAILER_HOST="localhost" \
+  -e MAILER_PROTOCOL="http" \
+  --name rails_8_api_image_processing \
+  $IMAGE
+# Web UI: http://localhost:8025
+
+# --- GitHub Codespaces ---
+# In Codespaces, port 80 is auto-detected. The app is reachable at:
+#   https://${CODESPACE_NAME}-80.app.github.dev
+#
+# Mailpit uses port 1025 (SMTP) and 8025 (web UI). Open these ports
+# via Codespaces "Ports" panel or manually:
+#   https://${CODESPACE_NAME}-8025.app.github.dev
+#
+# Quick start (all vars auto-detected):
+#   docker build -t $IMAGE .
+#   docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+#   bash tmp/run-sqlite-docker.sh
+#
+# Or manually:
+#   docker run -d -p 80:3000 \
+#     -e SMTP_ADDRESS="172.17.0.1" \
+#     -e SMTP_PORT=1025 \
+#     -e RAILS_MASTER_KEY=$(cat config/master.key) \
+#     -e MAILER_HOST="${CODESPACE_NAME}-80.app.github.dev" \
+#     -e MAILER_PROTOCOL="https" \
+#     --name rails_8_api_image_processing \
+#     $IMAGE
+
+# Run in foreground with shell access
+docker run -it --rm --user root $IMAGE bash
+
+# Run via Thruster (port 80 internal)
+docker run -it --rm $IMAGE:latest bash
+
+# Alternative: run on custom port
+docker run -d -p 4000:80 -e RAILS_MASTER_KEY=$(cat config/master.key) --name rails_8_api_image_processing $IMAGE
+
+# Logs
 docker logs rails_8_api_image_processing
-docker build -t rails_8_api_image_processing .
-
-
-docker run -it --rm --user root rails_8_api_image_processing bash
-
-run the image:
-docker run -it --rm rails_8_api_image_processing:latest bash
-
-./bin/thrust ./bin/rails server
-
-docker run -p 4000:80 -e RAILS_MASTER_KEY=$(cat config/master.key) --name rails_8_api_image_processing rails_8_api_image_processing
-docker run -d -p 4000:80 -e RAILS_MASTER_KEY=$(cat config/master.key) --name rails_8_api_image_processing rails_8_api_image_processing
 
